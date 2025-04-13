@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* Prevent overscroll bounce effect */
+html, body {
+  overscroll-behavior: none;
+}
+
