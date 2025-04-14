@@ -63,7 +63,7 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
         <div className="flex-grow overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-8">
-              <span className="font-mono text-lg font-medium">Divij Motwani</span>
+                <span className="font-sans text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">Divij Motwani</span>
             </div>
             
             <div className="space-y-6">

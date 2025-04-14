@@ -725,9 +725,13 @@ if (!isNameSet && !forceConnect) {
       addChatMessage(message.text, peerId); // addChatMessage will now handle name lookup
     } else if (type === 'user-info') {
         console.log(`Received user info from ${peerId}:`, message.name);
-        setPeerConnections(prev => prev[peerId] ? { ...prev, [peerId]: { ...prev[peerId], name: message.name } } : prev);
-        // Optionally update existing chat messages from this sender
-        setChatMessages(prev => prev.map(msg => msg.sender === peerId ? { ...msg, senderName: message.name } : msg));
+        const newName = message.name;
+        // Update peer connection state
+        setPeerConnections(prev => prev[peerId] ? { ...prev, [peerId]: { ...prev[peerId], name: newName } } : prev);
+        // Update existing chat messages from this sender
+        setChatMessages(prevMessages => prevMessages.map(msg =>
+            msg.sender === peerId ? { ...msg, senderName: newName } : msg
+        ));
     } else if (type === 'file-info') {
       const { fileId, name, size, fileType } = message;
       console.log(`Receiving file info from ${peerId}: ${name} (${formatFileSize(size)})`);
@@ -812,6 +816,7 @@ if (!isNameSet && !forceConnect) {
     setServerError(null);
 
     const fileInfoMessage = JSON.stringify({ type: 'file-info', fileId, name: fileName, size: fileSize, fileType });
+    const BUFFER_THRESHOLD = FILE_CHUNK_SIZE * 4; // 256KB buffer threshold
 
     // --- FIX: Set initial progress state BEFORE reading the file ---
     connectedPeers.forEach(conn => {
@@ -869,52 +874,54 @@ if (!isNameSet && !forceConnect) {
         const chunkMessage = JSON.stringify({ type: 'file-chunk', fileId, chunk: base64Chunk, index: i, isLast: i === totalChunks - 1 });
 
         const sendPromises = connectedPeers.map(async (conn) => {
-          const transferKey = `${fileId}_${conn.peerId}`;
-          let peerStatus: PeerConnection['status'] | undefined; // Variable to store peer status
+            const transferKey = `${fileId}_${conn.peerId}`;
+            let peerStatus: PeerConnection['status'] | undefined;
+            peerStatus = peerConnectionsRef.current[conn.peerId]?.status;
 
-          // Read peer status using ref
-          peerStatus = peerConnectionsRef.current[conn.peerId]?.status;
+            console.log(`[Chunk ${i}, Peer ${conn.peerId}] Checking Peer Status: ${peerStatus}`);
 
-          // Log the check results
-          // --- FIX: Simplify the check. Only check if peer is connected. ---
-          // We are inside the sendFile function, so we assume the intention is to send.
-          // The initial state was set to 'sending'. If it failed before the loop, it will be handled later.
-          console.log(`[Chunk ${i}, Peer ${conn.peerId}] Checking Peer Status: ${peerStatus}`);
+            if (peerStatus === 'connected') {
+                try {
+                    // Introduce a small delay before sending the next chunk to act as rate limiting
+                    // Adjust the delay (e.g., 10ms) as needed based on testing performance
+                    await new Promise(resolve => setTimeout(resolve, 5)); // 5ms delay
 
-          if (peerStatus === 'connected') {
-          // --- END FIX ---
-            try {
-              // Attempt to send the chunk
-              conn.peer.send(chunkMessage);
+                     // Re-check status in case peer disconnected while waiting
+                     if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
+                         console.log(`[Chunk ${i}, Peer ${conn.peerId}] Peer disconnected before sending chunk after delay.`);
+                         throw new Error("Peer disconnected before sending chunk"); // Exit sending for this peer
+                     }
 
-              // Calculate progress and check for completion
-              const progress = Math.round(((i + 1) / totalChunks) * 100);
-              const isComplete = i === totalChunks - 1;
+                    // Attempt to send the chunk
+                    conn.peer.send(chunkMessage);
 
-              // Update progress state periodically or on completion
-               if (progress % 5 === 0 || isComplete) {
-                    setSendProgress(prev => {
-                        const current = prev[transferKey];
-                        // Only update if still in 'sending' state
-                        if (current && current.status === 'sending') {
-                            return { ...prev, [transferKey]: { ...current, progress, status: isComplete ? 'complete' : 'sending' } };
-                        }
-                        return prev; // Otherwise, keep the existing state (e.g., if it became 'failed')
-                    });
-               }
-               if (isComplete) {
-                   console.log(`File ${fileName} sent completely to ${conn.peerId}`);
-               }
-            } catch (error) {
-                 console.error(`Error sending chunk ${i} to ${conn.peerId}:`, error);
-                 // Set status to 'failed' on send error
-                 setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+                    // Calculate progress and check for completion
+                    const progress = Math.round(((i + 1) / totalChunks) * 100);
+                    const isComplete = i === totalChunks - 1;
+
+                    // Update progress state periodically or on completion
+                     if (progress % 5 === 0 || isComplete) {
+                          setSendProgress(prev => {
+                              const current = prev[transferKey];
+                              // Only update if still in 'sending' state
+                              if (current && current.status === 'sending') {
+                                  return { ...prev, [transferKey]: { ...current, progress, status: isComplete ? 'complete' : 'sending' } };
+                              }
+                              return prev; // Otherwise, keep the existing state (e.g., if it became 'failed')
+                          });
+                     }
+                     if (isComplete) {
+                         console.log(`File ${fileName} sent completely to ${conn.peerId}`);
+                     }
+                } catch (error) {
+                     console.error(`Error sending chunk ${i} to ${conn.peerId}:`, error);
+                     // Set status to 'failed' on send error
+                     setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+                }
+            } else {
+                // Log why a chunk is skipped if the peer is not connected
+                console.warn(`Skipping chunk ${i} for ${conn.peerId}. Reason: Peer Status='${peerStatus}'. Expected: Peer='connected'.`);
             }
-          } else {
-              // Log why a chunk is skipped if the peer is not connected
-              console.warn(`Skipping chunk ${i} for ${conn.peerId}. Reason: Peer Status='${peerStatus}'. Expected: Peer='connected'.`);
-          }
-          // No need for an else block here, if status is already failed/complete, we just don't send.
         });
 
         // Wait for all send attempts for the current chunk to resolve (or reject)
@@ -1017,7 +1024,20 @@ if (!isNameSet && !forceConnect) {
                            <input type="text" id="userNameInput" placeholder="Enter name..." value={userName} onChange={(e) => setUserName(e.target.value)} maxLength={20}
                                className="flex-grow px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-sm dark:placeholder-neutral-400 w-full"
                            />
-                           <button onClick={() => userName.trim() && setIsNameSet(true)} disabled={!userName.trim()}
+                           <button onClick={() => {
+                               const trimmedName = userName.trim();
+                               if (trimmedName) {
+                                   setIsNameSet(true);
+                                   // Broadcast the name update to connected peers
+                                   const userInfoPayload = JSON.stringify({ type: 'user-info', name: trimmedName });
+                                   Object.values(peerConnectionsRef.current).forEach(conn => {
+                                       if (conn.status === 'connected') {
+                                           try { conn.peer.send(userInfoPayload); }
+                                           catch (error) { console.error(`Failed to send user-info update to ${conn.peerId}:`, error); }
+                                       }
+                                   });
+                               }
+                           }} disabled={!userName.trim()}
                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm disabled:opacity-50">Set</button>
                        </div>
                    </div>
