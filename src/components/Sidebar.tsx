@@ -32,7 +32,7 @@ const tools: Tool[] = [
     name: 'File Converter',
     description: 'Convert between various file formats',
     icon: 'repeat',
-    path: '/tools/converter'
+    path: '/tools/file-converter'
   }
 ];
 

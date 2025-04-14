@@ -13,6 +13,8 @@ import Contact from './pages/Contact';
 import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
+import FileConverter from './pages/FileConverter'; // Add import for FileConverter
+// import MinimalFFmpegLoader from './pages/MinimalFFMg'; // Import the MinimalFFmpegLoader component
 
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -66,7 +68,7 @@ function Home() {
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Some time ago, I competed at the <a href="https://www.societyforscience.org/isef/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Regeneron International Science and Engineering Fair</a>. We presented <a href="https://oralai.tech" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">OralAI</a>, a new consumer dental disease detection system, which ended up winning the First Place Grand Award within the Biomedical Engineering category. The system is now non-provisional patent pending under a pro-bono grant from Procopio LLC.
+              Some time ago, I competed at the <a href="https://www.societyforscience.org/isef/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Regeneron International Science and Engineering Fair</a>. We presented <a href="https://oralai.tech" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">OralAI</a>, a new consumer dental disease detection system, which ended up winning the First Place Grand Award within the Biomedical Engineering category. The system is now non-provisional patent pending under a pro-bono grant from <a href="https://www.procopio.com/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Procopio LLP</a>.
             </span>
           </li>
         </ul>
@@ -88,6 +90,7 @@ function App() {
           <Route path="/tools/word-counter" element={<Layout><WordCounter /></Layout>} />
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
+          <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} /> {/* Add route for FileConverter */}
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
