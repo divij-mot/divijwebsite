@@ -60,7 +60,13 @@ function Home() {
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              In my sophomore year of high school, I founded a STEM publication which covered tech innovation in the Bay Area. During my time there, we covered TechCrunch Disrupt, Amazon's Robotics Centers, Waymo, and much more. I love to read and write, and hope you'll enjoy some of <a href="/blogs" className="text-blue-500 hover:underline">my blogs</a>.
+              In my sophomore year of high school, I founded a <a href="https://issuu.com/palyveritas" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">STEM publication</a> which covered tech innovation in the Bay Area. During my time there, we covered TechCrunch Disrupt, Amazon's Robotics Centers, Waymo, and much more. I love to read and write, and hope you'll enjoy some of <a href="/blogs" className="text-blue-500 hover:underline">my blogs</a>.
+            </span>
+          </li>
+          <li className="flex items-start">
+            <span className="text-neutral-400 mr-2">•</span>
+            <span className="text-neutral-600 dark:text-neutral-400">
+              Some time ago, I competed at the <a href="https://www.societyforscience.org/isef/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Regeneron International Science and Engineering Fair</a>. We presented <a href="https://oralai.tech" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">OralAI</a>, a new consumer dental disease detection system, which ended up winning the First Place Grand Award within the Biomedical Engineering category. The system is now non-provisional patent pending under a pro-bono grant from Procopio LLC.
             </span>
           </li>
         </ul>
