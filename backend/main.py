@@ -32,7 +32,7 @@ app = FastAPI(title="P2P Signalling Server", version="1.0.0")
 #                         ╰────────────────────────────────╯
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://divijmotwani.com", "http://localhost:5173"],  # tighten this in production!
+    allow_origins=["https://divijwebsite.vercel.app", "http://localhost:5173"],  # tighten this in production!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

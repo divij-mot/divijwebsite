@@ -12,7 +12,7 @@ app = FastAPI(title="Divij Website Tools Backend")
 # Configure CORS
 origins = [
     "http://localhost:5173",  # Allow frontend dev server
-    "http://127.0.0.1:5173",
+    "https://divijwebsite.vercel.app",
     # Add your production frontend URL here when deployed
     # "https://yourdomain.com",
 ]
