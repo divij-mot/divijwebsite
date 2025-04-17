@@ -5,10 +5,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Peer from 'simple-peer/simplepeer.min.js'; // Explicitly import browser bundle
 import type { Instance as PeerInstance } from 'simple-peer'; // Import type separately
 import { Upload, Download, Copy, Link as LinkIcon, Users, MessageSquare, X, Check, RefreshCw, Send, Paperclip, AlertCircle, WifiOff, Wifi, Loader2 } from 'lucide-react';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 // Constants (ensure these are correct for your setup)
-const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : 'wss://your-production-ws-domain.com'; // <-- REPLACE if needed
-const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : 'https://your-production-api-domain.com'; // <-- REPLACE if needed
+const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
+const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
 const FILE_CHUNK_SIZE = 64 * 1024; // 64KB chunks
 
 // Types

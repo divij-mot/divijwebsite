@@ -29,6 +29,8 @@ import {
   X
 } from 'lucide-react';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tool =
   | 'pen'
@@ -69,12 +71,12 @@ interface PeerConnection {
 const API_BASE_URL =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:8000'
-    : 'https://your-production-api-domain.com';
+    : BACKEND_URL;
 
 const SIGNALING_SERVER_URL =
   process.env.NODE_ENV === 'development'
     ? 'ws://localhost:8000'
-    : 'wss://your-production-ws-domain.com';
+    : `wss://${BACKEND_URL.replace('https://', '')}`; // Updated to use BACKEND_URL
 
 // ─── Helper utilities ────────────────────────────────────────────────────────
 const uuid = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
