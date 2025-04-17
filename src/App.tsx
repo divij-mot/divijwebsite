@@ -14,6 +14,7 @@ import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
 import FileConverter from './pages/FileConverter'; // Add import for FileConverter
+import Whiteboard from './pages/Whiteboard';
 // import MinimalFFmpegLoader from './pages/MinimalFFMg'; // Import the MinimalFFmpegLoader component
 
 
@@ -91,6 +92,7 @@ function App() {
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
           <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} /> {/* Add route for FileConverter */}
+          <Route path="/tools/whiteboard" element={<Layout><Whiteboard /></Layout>} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
