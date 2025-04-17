@@ -9,13 +9,13 @@ function About() {
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Placeholder bullet point about my background or interests.
+              WIP.
             </span>
           </li>
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Another placeholder bullet point detailing skills or experiences.
+              WIP.
             </span>
           </li>
         </ul>

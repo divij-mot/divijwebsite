@@ -9,13 +9,13 @@ function Portfolio() {
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Placeholder for Project 1 description.
+              WIP.
             </span>
           </li>
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Placeholder for Project 2 description.
+              WIP.
             </span>
           </li>
         </ul>

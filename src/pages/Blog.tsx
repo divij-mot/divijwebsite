@@ -7,7 +7,7 @@ function Blog() {
       <div className="prose prose-neutral dark:prose-invert">
         <h2 className="text-2xl font-semibold mb-4">Placeholder Blog Post</h2>
         <p className="text-neutral-600 dark:text-neutral-400">
-          This is a placeholder for a future blog post. Click <a href="#" className="text-blue-500 hover:underline">here</a> (link currently inactive).
+          WIP <a href="#" className="text-blue-500 hover:underline">here</a> (link currently inactive).
         </p>
       </div>
     </div>
