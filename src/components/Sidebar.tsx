@@ -151,15 +151,15 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
         {/* Footer section (sticky at the bottom) */}
         <div className="mt-auto p-6 border-t border-neutral-200 dark:border-neutral-800 flex-shrink-0">
           <div className="flex items-center justify-center gap-4">
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+            {/* <a href="https://github.com" target="_blank" rel="noopener noreferrer"
                className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
               <Github className="w-5 h-5" />
-            </a>
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
+            </a> */}
+            <a href="https://x.com/DivijMot" target="_blank" rel="noopener noreferrer"
                className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
               <Twitter className="w-5 h-5" />
             </a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer"
+            <a href="https://www.linkedin.com/in/divijmotwani" target="_blank" rel="noopener noreferrer"
                className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
               <Linkedin className="w-5 h-5" />
             </a>
