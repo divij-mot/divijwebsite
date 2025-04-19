@@ -237,8 +237,21 @@ const Share: React.FC = () => {
       addChatMessage(`Connected with ${peerConnectionsRef.current[peerId]?.name || peerId}`, 'system');
 
       // Send user info after connection
-      const userInfoPayload = JSON.stringify({ type: 'user-info', name: userNameRef.current });
+      const userInfoPayload = JSON.stringify({ type: 'user-info', name: userNameRef.current, userId: userIdRef.current });
       try { peer.send(userInfoPayload); } catch (error) { console.error(`Failed to send user-info to ${peerId}:`, error); }
+
+      // Send list of other connected peers to the new peer
+      const otherPeerIds = Object.keys(peerConnectionsRef.current).filter(
+          id => id !== peerId && peerConnectionsRef.current[id]?.status === 'connected'
+      );
+      if (otherPeerIds.length > 0) {
+          try {
+              peer.send(JSON.stringify({ type: 'peer-list', peers: otherPeerIds }));
+              console.log(`Sent peer list to ${peerId}:`, otherPeerIds);
+          } catch (error) {
+              console.error(`Failed to send peer-list to ${peerId}:`, error);
+          }
+      }
 
     });
 
@@ -325,8 +338,10 @@ const Share: React.FC = () => {
 
         case 'connection-request':
             const senderName = message.name || peerId;
-            const autoAccept = message.autoAccept === true;
-            console.log(`Received connection request from ${senderName} (${peerId}). Auto-accept: ${autoAccept}`);
+            const autoAccept = message.autoAccept === true; // Explicitly check for true
+            // Add more detailed logging here
+            console.log(`Received 'connection-request' from ${senderName} (${peerId}). Payload:`, message); // Log the whole message
+            console.log(` -> Parsed autoAccept flag: ${autoAccept}`);
 
             // Always store the peer info temporarily
              setPeerConnections(prev => ({
@@ -733,6 +748,21 @@ if (!isNameSet && !forceConnect) {
         setChatMessages(prevMessages => prevMessages.map(msg =>
             msg.sender === peerId ? { ...msg, senderName: newName } : msg
         ));
+    } else if (type === 'peer-list') { // Handle receiving list of peers
+        console.log(`Received peer list from ${peerId}:`, message.peers);
+        message.peers?.forEach((idToConnect: string) => {
+            // Connect if not self and not already connected/connecting/pending
+            if (
+                idToConnect !== userIdRef.current &&
+                !peerConnectionsRef.current[idToConnect] &&
+                !incomingRequests[idToConnect] // Also check if already pending manual accept
+            ) {
+                console.log(`[Mesh] Connecting to peer from received list: ${idToConnect}`);
+                // FIX: Directly initialize the P2P connection as initiator, don't go through server request again.
+                // Use a slight delay to prevent potential signaling storms if lists cross paths.
+                setTimeout(() => initializePeerConnection(idToConnect, true), Math.random() * 300 + 50);
+            }
+        });
     } else if (type === 'file-info') {
       const { fileId, name, size, fileType } = message;
       console.log(`Receiving file info from ${peerId}: ${name} (${formatFileSize(size)})`);
