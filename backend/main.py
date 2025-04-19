@@ -23,6 +23,7 @@ ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(',')]
 app = FastAPI(title="P2P Signalling Server (Combined)", version="1.1.0")
 
 @app.get("/health")
+@app.head("/health")
 async def health():
     return {"status": "ok"}
 
