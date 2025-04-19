@@ -12,7 +12,7 @@ const tools: Tool[] = [
   },
   {
     name: 'Text Editor',
-    description: 'Sublime Text style editor',
+    description: 'In browser text editor',
     icon: 'edit',
     path: '/tools/editor'
   },
@@ -24,13 +24,13 @@ const tools: Tool[] = [
   },
   {
     name: 'P2P Share',
-    description: 'ShareDrop style file sharing', 
+    description: 'P2P file sharing', 
     icon: 'share',
     path: '/tools/share' 
   }, 
   {
     name: 'File Converter',
-    description: 'Convert between various file formats',
+    description: 'In Browser File Conversion',
     icon: 'repeat',
     path: '/tools/file-converter'
   }
