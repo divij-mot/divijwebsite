@@ -14,11 +14,18 @@ from starlette.websockets import WebSocketState
 # --- Configuration ---
 # Read allowed origins from environment variables or use defaults
 # Example: ALLOWED_ORIGINS="https://divijwebsite.vercel.app,http://localhost:5173"
+
+
 import os
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://divijwebsite.vercel.app,http://localhost:5173")
 ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(',')]
 
 app = FastAPI(title="P2P Signalling Server (Combined)", version="1.1.0")
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 
 # --- CORS Middleware ---
 app.add_middleware(
