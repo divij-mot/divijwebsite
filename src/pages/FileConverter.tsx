@@ -46,6 +46,7 @@ const FileConverter: React.FC = () => {
   const [overallError, setOverallError] = useState<string | null>(null);
   const [showFormatWarning, setShowFormatWarning] = useState(false);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false); // State for drag overlay
 
   // --- Ref Hooks ---
   const ffmpegRef = useRef(new FFmpeg());
@@ -131,32 +132,84 @@ const FileConverter: React.FC = () => {
   }, []); // Empty dependency array: cleanup runs only on unmount
 
   // --- Event Handlers & Logic ---
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const newFiles: FileStatus[] = Array.from(files).map(file => {
-        const extension = file.name.split('.').pop()?.toUpperCase();
-        let inputFormat: SupportedInput | null = null;
-        if (extension === 'HEIC') inputFormat = 'HEIC';
-        else if (extension === 'JPG' || extension === 'JPEG') inputFormat = 'JPG';
-        else if (extension === 'PNG') inputFormat = 'PNG';
-        else if (extension === 'TIFF' || extension === 'TIF') inputFormat = 'TIFF';
-        else if (extension === 'MP4') inputFormat = 'MP4';
-        else if (extension === 'DOCX') inputFormat = 'DOCX';
 
-        return {
-          file,
-          id: `${file.name}-${file.lastModified}-${Math.random()}`,
-          inputFormat,
-          status: 'pending',
-        };
-      });
-      setFilesToProcess(prevFiles => [...prevFiles, ...newFiles]);
-      setOverallError(null);
-    }
-     event.target.value = ''; // Reset input
+  // Combined file processing logic for select, drop, and paste
+  const processInputFiles = useCallback((files: FileList | null | undefined) => {
+    if (!files || files.length === 0) return;
+
+    const newFiles: FileStatus[] = Array.from(files).map((file: File) => { // Explicitly type 'file' here
+      const extension = file.name.split('.').pop()?.toUpperCase();
+      let inputFormat: SupportedInput | null = null;
+      if (extension === 'HEIC') inputFormat = 'HEIC';
+      else if (extension === 'JPG' || extension === 'JPEG') inputFormat = 'JPG';
+      else if (extension === 'PNG') inputFormat = 'PNG';
+      else if (extension === 'TIFF' || extension === 'TIF') inputFormat = 'TIFF';
+      else if (extension === 'MP4') inputFormat = 'MP4';
+      else if (extension === 'DOCX') inputFormat = 'DOCX';
+
+      return {
+        file,
+        id: `${file.name}-${file.lastModified}-${Math.random()}`,
+        inputFormat,
+        status: 'pending',
+      };
+    });
+    setFilesToProcess(prevFiles => [...prevFiles, ...newFiles]);
+    setOverallError(null);
+  }, []); // No dependencies needed
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    processInputFiles(event.target.files);
+    event.target.value = ''; // Reset file input after selection
   };
 
+  // Drag and Drop Handlers
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const relatedTarget = e.relatedTarget as Node;
+      if (!e.currentTarget.contains(relatedTarget)) {
+          setIsDragging(false);
+      }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault(); // Necessary to allow drop
+      e.stopPropagation();
+      setIsDragging(true); // Keep dragging state active
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      processInputFiles(e.dataTransfer.files);
+  }, [processInputFiles]);
+
+  // Paste Event Listener Effect
+  useEffect(() => {
+      const handlePaste = (event: ClipboardEvent) => {
+        // Check if the event target is an input/textarea to avoid interfering
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+            return;
+        }
+        processInputFiles(event.clipboardData?.files);
+      };
+      document.addEventListener('paste', handlePaste);
+      return () => {
+          document.removeEventListener('paste', handlePaste);
+      };
+  }, [processInputFiles]);
+
+
+  // --- MOVE FUNCTIONS INSIDE COMPONENT ---
   const handleOutputFormatChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
       const selectedFormat = event.target.value as PossibleOutputFormat;
       setSelectedOutputFormat(selectedFormat);
@@ -237,7 +290,7 @@ const FileConverter: React.FC = () => {
         let outputBlob: Blob | null = null;
 
         // --- Image Conversion (heic2any or Canvas) ---
-        if (['HEIC', 'JPG', 'PNG', 'TIFF'].includes(inputFormat) && ['JPG', 'PNG', 'TIFF'].includes(selectedOutputFormat)) {
+        if (inputFormat && ['HEIC', 'JPG', 'PNG', 'TIFF'].includes(inputFormat) && ['JPG', 'PNG', 'TIFF'].includes(selectedOutputFormat)) {
             const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
             if (inputFormat === 'HEIC') {
                 console.log(`Converting HEIC ${file.name} to ${selectedOutputFormat}...`);
@@ -329,16 +382,31 @@ const FileConverter: React.FC = () => {
         setOverallError("Some file conversions failed. Check individual file statuses.");
     }
 
-  }, [filesToProcess, selectedOutputFormat, ffmpegLoaded, isFormatCompatible]); // Dependencies for useCallback
+  }, [filesToProcess, selectedOutputFormat, ffmpegLoaded, isFormatCompatible, updateFileStatus, setOverallError, setIsProcessing, ffmpegRef]); // Added missing dependencies
 
   // Calculate pending compatible files for button text
   const pendingCompatibleFileCount = filesToProcess.filter(
       fs => fs.status === 'pending' && selectedOutputFormat && isFormatCompatible(fs, selectedOutputFormat)
   ).length;
+  // --- END MOVE FUNCTIONS INSIDE COMPONENT ---
+
 
   // --- JSX Return ---
   return (
-    <div className="p-6 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300 flex flex-col">
+    <div
+        className="relative p-6 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300 flex flex-col"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+    >
+        {/* Drag Overlay */}
+        {isDragging && (
+            <div className="absolute inset-0 bg-blue-500/30 dark:bg-blue-800/30 border-4 border-dashed border-blue-600 dark:border-blue-400 rounded-lg flex items-center justify-center pointer-events-none z-50">
+                <p className="text-2xl font-semibold text-blue-800 dark:text-blue-200">Drop files here</p>
+            </div>
+        )}
+
       <h1 className="text-3xl font-bold mb-6">File Converter</h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-sm">
         Convert files directly in your browser. Your files stay on your device. Supports HEIC, JPG, PNG, TIFF images and MP4 video/audio extraction.
@@ -364,19 +432,21 @@ const FileConverter: React.FC = () => {
         <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-4">
             <div className="p-4 border border-neutral-300 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-800">
                 <h2 className="text-lg font-semibold mb-3">1. Input & Format</h2>
-                <div className="mb-4">
-                    <label htmlFor="file-input" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"> Choose Files: </label>
-                    <input
-                        id="file-input"
-                        type="file"
-                        multiple
-                        onChange={handleFileChange}
-                        className="block w-full text-sm text-neutral-500 dark:text-neutral-400 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 cursor-pointer border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700 p-1"
-                        disabled={isProcessing}
-                        accept=".heic,.jpg,.jpeg,.png,.tiff,.tif,.mp4"
-                    />
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">HEIC, JPG, PNG, TIFF, MP4</p>
-                </div>
+                 {/* Reverted File Input Button Area */}
+                 <div className="mb-4">
+                     <label htmlFor="file-input" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"> Choose Files: </label>
+                     <input
+                         id="file-input"
+                         type="file"
+                         multiple
+                         onChange={handleFileChange}
+                         className="block w-full text-sm text-neutral-500 dark:text-neutral-400 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 cursor-pointer border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700 p-1"
+                         disabled={isProcessing}
+                         accept=".heic,.jpg,.jpeg,.png,.tiff,.tif,.mp4"
+                     />
+                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">HEIC, JPG, PNG, TIFF, MP4</p>
+                 </div>
+                 {/* End Reverted File Input Button Area */}
 
                 <div className="mb-4">
                     <label htmlFor="output-format" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"> Convert To: </label>
@@ -479,9 +549,9 @@ const FileConverter: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="flex items-center space-x-2 flex-shrink-0">
-                                        {fs.status === 'pending' && !isCompatible && selectedOutputFormat && <FileWarning className="w-4 h-4 text-yellow-600 dark:text-yellow-500" title="Incompatible for selected output"/>}
+                                        {fs.status === 'pending' && !isCompatible && selectedOutputFormat && <span title="Incompatible for selected output"><FileWarning className="w-4 h-4 text-yellow-600 dark:text-yellow-500" /></span>}
                                         {fs.status === 'pending' && (!selectedOutputFormat || isCompatible) && <span className="text-xs text-neutral-500 dark:text-neutral-400">Ready</span>}
-                                        {fs.status === 'converting' && <Loader2 className="w-4 h-4 animate-spin text-blue-500" title="Converting..."/>}
+                                        {fs.status === 'converting' && <span title="Converting..."><Loader2 className="w-4 h-4 animate-spin text-blue-500" /></span>}
                                         {fs.status === 'done' && fs.resultUrl && (
                                             <a
                                                 href={fs.resultUrl}
@@ -492,7 +562,7 @@ const FileConverter: React.FC = () => {
                                                 <Download className="w-4 h-4" />
                                             </a>
                                         )}
-                                        {fs.status === 'error' && <XCircle className="w-4 h-4 text-red-500" title={fs.error || 'Conversion failed'}/>}
+                                        {fs.status === 'error' && <span title={fs.error || 'Conversion failed'}><XCircle className="w-4 h-4 text-red-500" /></span>}
                                         <button
                                             onClick={() => removeFile(fs.id)}
                                             disabled={isProcessing && fs.status === 'converting'}

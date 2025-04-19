@@ -485,10 +485,6 @@ const Whiteboard: React.FC = () => {
   const [shareLink, setShareLink] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
   const [joinCode, setJoinCode] = useState<string>('');
-  const [incoming, setIncoming] = useState<{ peerId: string; name?: string }[]>(
-    []
-  );
-
   const socketRef = useRef<WebSocket | null>(null);
   const sendQueue = useRef<any[]>([]);
 
@@ -610,9 +606,18 @@ const Whiteboard: React.FC = () => {
       if (otherPeerIds.length > 0) {
           peer.send(JSON.stringify({ type: 'peer-list', peers: otherPeerIds }));
       }
-      // Also send own user info (if name is set)
-      if (userNameRef.current) {
-          peer.send(JSON.stringify({ type: 'user-info', name: userNameRef.current, userId: userIdRef.current }));
+      // Send peer list and user info (only if initiator of this P2P link)
+      if (initiator) {
+          const otherPeerIds = Object.keys(peerConnectionsRef.current).filter(
+              id => id !== peerId && peerConnectionsRef.current[id]?.status === 'connected'
+          );
+          if (otherPeerIds.length > 0) {
+              peer.send(JSON.stringify({ type: 'peer-list', peers: otherPeerIds }));
+          }
+          // Also send own user info (if name is set)
+          if (userNameRef.current) {
+              peer.send(JSON.stringify({ type: 'user-info', name: userNameRef.current, userId: userIdRef.current }));
+          }
       }
     });
 
@@ -647,18 +652,23 @@ const Whiteboard: React.FC = () => {
   const handleSignalingMessage = (msg: any) => {
     const { type, peerId, source, offer, answer, candidate } = msg;
     switch (type) {
-      case 'connection-request':
-        setIncoming(prev => [...prev, { peerId, name: msg.name }]);
+      case 'connection-request': {
+        // Auto-accept: Send success back immediately and prepare for offer
+        console.log(`Received connection request from ${msg.name || peerId}, auto-accepting.`);
+        sendToServer({ type: 'connection-success', target: peerId });
+        // Set peer state to connecting, ready to receive offer
         setPeerConnections(prev => ({
           ...prev,
           [peerId]: {
             peerId,
             peer: null,
-            status: 'pending_approval',
+            status: 'connecting', // Directly to connecting
             name: msg.name
           }
         }));
+        // No need to createPeer here, wait for the 'offer' signal
         break;
+      }
 
       case 'offer': {
         const target = source;
@@ -742,8 +752,14 @@ const Whiteboard: React.FC = () => {
         setStrokes([]);
         break;
       case 'full-state':
-        // Maybe merge states carefully instead of overwriting? For now, overwrite.
-        setStrokes(msg.strokes || []);
+        // Only accept full state if the current board is empty
+        // This prevents overwriting the host's drawing when a new peer joins
+        if (strokesRef.current.length === 0) {
+            console.log(`Received full state from ${sourcePeerId} and applying (board was empty).`);
+            setStrokes(msg.strokes || []);
+        } else {
+            console.log(`Received full state from ${sourcePeerId} but ignored (board not empty).`);
+        }
         break;
       case 'peer-list': // Handle receiving list of peers
         console.log(`Received peer list from ${sourcePeerId}:`, msg.peers);
@@ -757,8 +773,7 @@ const Whiteboard: React.FC = () => {
       case 'user-info': // Handle receiving user info
          console.log(`Received user info from ${sourcePeerId}:`, msg.name);
          setPeerConnections(prev => prev[sourcePeerId] ? { ...prev, [sourcePeerId]: { ...prev[sourcePeerId], name: msg.name } } : prev);
-         // Update incoming request name if applicable
-         setIncoming(prev => prev.map(req => req.peerId === sourcePeerId ? { ...req, name: msg.name } : req));
+         // No need to update incoming requests anymore
          break;
       default:
         console.warn(`Unknown peer data type from ${sourcePeerId}: ${msg.type}`);
@@ -938,21 +953,6 @@ const Whiteboard: React.FC = () => {
           </button>
         </div>
 
-        {/* Join code field */}
-        <div className="flex items-center gap-1 ml-auto">
-          <input
-            value={joinCode}
-            onChange={e => setJoinCode(e.target.value)}
-            placeholder="Join code"
-            className="px-2 py-1 border border-neutral-400 dark:border-neutral-600 rounded w-32 text-sm bg-white dark:bg-neutral-800 outline-none"
-          />
-          <button
-            onClick={() => requestPeerConnection(joinCode.trim())}
-            className="px-2 py-1 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
-          >
-            Join
-          </button>
-        </div>
       </div>
 
       {/* Canvas */}
@@ -989,37 +989,7 @@ const Whiteboard: React.FC = () => {
           />
         )}
 
-        {/* Incoming connection requests */}
-        {incoming.map(req => (
-          <div
-            key={req.peerId}
-            className="absolute right-4 bottom-4 bg-neutral-100 dark:bg-neutral-800 border border-neutral-400 dark:border-neutral-600 rounded shadow-lg p-3 flex items-center gap-3 mb-2"
-          >
-            <span className="font-medium">
-              {req.name || 'Someone'} wants to join
-            </span>
-            <button
-              onClick={() => {
-                sendToServer({ type: 'connection-success', target: req.peerId });
-                setIncoming(prev => prev.filter(r => r.peerId !== req.peerId));
-              }}
-              className="p-1 rounded bg-green-600 hover:bg-green-700 text-white"
-              title="Accept"
-            >
-              <Check size={16} />
-            </button>
-            <button
-              onClick={() => {
-                sendToServer({ type: 'connection-declined', target: req.peerId });
-                setIncoming(prev => prev.filter(r => r.peerId !== req.peerId));
-              }}
-              className="p-1 rounded bg-red-600 hover:bg-red-700 text-white"
-              title="Decline"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))}
+        {/* Incoming connection requests removed */}
       </div>
     </div>
   );

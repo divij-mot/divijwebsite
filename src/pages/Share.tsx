@@ -68,6 +68,7 @@ const Share: React.FC = () => {
   const [showChat, setShowChat] = useState<boolean>(true);
   const [shareLink, setShareLink] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false); // State for drag overlay
 
   // --- Refs ---
   const socketRef = useRef<WebSocket | null>(null);
@@ -834,6 +835,60 @@ if (!isNameSet && !forceConnect) {
     }
   };
 
+  // --- Drag and Drop / Paste File Handling ---
+  const processDroppedFiles = useCallback((files: FileList | null | undefined) => {
+      if (files && files.length > 0) {
+          // For simplicity, handle only the first file dropped/pasted
+          const file = files[0];
+          console.log("File received via drop/paste:", file.name);
+          setSelectedFile(file);
+          setServerError(null);
+          // Optionally clear the file input ref value if it was used previously
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+  }, []); // No dependencies needed
+
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Add a small delay or check relatedTarget to prevent flickering when moving over child elements
+      const relatedTarget = e.relatedTarget as Node;
+      if (!e.currentTarget.contains(relatedTarget)) {
+          setIsDragging(false);
+      }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault(); // Necessary to allow drop
+      e.stopPropagation();
+      setIsDragging(true); // Keep dragging state active
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      processDroppedFiles(e.dataTransfer.files);
+  }, [processDroppedFiles]);
+
+  // Paste event listener
+  useEffect(() => {
+      const handlePaste = (event: ClipboardEvent) => {
+          processDroppedFiles(event.clipboardData?.files);
+      };
+      document.addEventListener('paste', handlePaste);
+      return () => {
+          document.removeEventListener('paste', handlePaste);
+      };
+  }, [processDroppedFiles]);
+
+
   const sendFile = useCallback(async () => {
     if (!selectedFile) { setServerError("No file selected."); return; }
     const connectedPeers = Object.values(peerConnectionsRef.current).filter(conn => conn.status === 'connected');
@@ -1037,7 +1092,20 @@ if (!isNameSet && !forceConnect) {
 
   // --- Return JSX ---
   return (
-    <div className="p-4 md:p-6 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300 flex flex-col md:flex-row gap-6">
+    <div
+        className="relative p-4 md:p-6 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300 flex flex-col md:flex-row gap-6"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+    >
+        {/* Drag Overlay */}
+        {isDragging && (
+            <div className="absolute inset-0 bg-blue-500/30 dark:bg-blue-800/30 border-4 border-dashed border-blue-600 dark:border-blue-400 rounded-lg flex items-center justify-center pointer-events-none z-50">
+                <p className="text-2xl font-semibold text-blue-800 dark:text-blue-200">Drop file here</p>
+            </div>
+        )}
+
         {/* Left Column */}
         <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-4">
             {/* User ID & Share Link */}
@@ -1158,12 +1226,14 @@ if (!isNameSet && !forceConnect) {
             <div className="p-4 border border-neutral-300 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-800">
                  <h2 className="text-lg font-semibold mb-3">File Transfer</h2>
                  <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-                    <label className={`px-4 py-2 rounded border border-neutral-300 dark:border-neutral-600 cursor-pointer flex items-center gap-2 text-sm ${selectedFile ? 'bg-neutral-100 dark:bg-neutral-700' : 'bg-white dark:bg-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-500'}`}>
-                        <Paperclip className="w-4 h-4" /> <span>{selectedFile ? "Change File" : "Choose File"}</span>
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" disabled={connectedPeerCount === 0} />
-                    </label>
-                    {selectedFile && ( <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate max-w-[200px]" title={selectedFile.name}> {selectedFile.name} ({formatFileSize(selectedFile.size)}) </span> )}
-                    {!selectedFile && <span className="text-sm text-neutral-500 dark:text-neutral-400">No file chosen</span>}
+                     {/* Reverted File Input Button */}
+                     <label className={`px-4 py-2 rounded border border-neutral-300 dark:border-neutral-600 cursor-pointer flex items-center gap-2 text-sm ${selectedFile ? 'bg-neutral-100 dark:bg-neutral-700' : 'bg-white dark:bg-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-500'}`}>
+                         <Paperclip className="w-4 h-4" /> <span>{selectedFile ? "Change File" : "Choose File"}</span>
+                         <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" disabled={connectedPeerCount === 0 && !selectedFile} />
+                     </label>
+                     {selectedFile && ( <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate max-w-[200px]" title={selectedFile.name}> {selectedFile.name} ({formatFileSize(selectedFile.size)}) </span> )}
+                     {!selectedFile && <span className="text-sm text-neutral-500 dark:text-neutral-400">No file chosen</span>}
+                     {/* End Reverted File Input Button */}
                     <button onClick={sendFile} disabled={!selectedFile || connectedPeerCount === 0 || Object.values(sendProgress).some(p => p.status === 'sending')}
                         className="ml-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"> <Send className="w-4 h-4" /> Send </button>
                  </div>
