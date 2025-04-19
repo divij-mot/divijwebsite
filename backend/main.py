@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketState
 
 
 import os
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://divijwebsite.vercel.app,http://localhost:5173")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://divijmotwani.com,http://localhost:5173")
 ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(',')]
 
 app = FastAPI(title="P2P Signalling Server (Combined)", version="1.1.0")
