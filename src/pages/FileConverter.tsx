@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import heic2any from 'heic2any';
+import * as UTIF from 'utif';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util'; // toBlobURL is not strictly needed for this implementation anymore
 import { CheckCircle, XCircle, Download, Loader2, FileWarning, AlertCircle, X } from 'lucide-react';
@@ -302,30 +303,71 @@ const FileConverter: React.FC = () => {
                     console.warn("Canvas conversion to TIFF is often unsupported by browsers. This might fail.");
                 }
                 outputBlob = await new Promise<Blob>((resolve, reject) => {
+                  const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
+                  if (inputFormat === 'TIFF') {
+                    // Decode TIFF using UTIF.js
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                      if (!e.target?.result || !(e.target.result instanceof ArrayBuffer)) {
+                        return reject(new Error('TIFF file could not be read.'));
+                      }
+                      try {
+                        const buffer = e.target.result as ArrayBuffer;
+                        const ifds = UTIF.decode(buffer);
+                        UTIF.decodeImage(buffer, ifds[0]);
+                        const width = ifds[0].width;
+                        const height = ifds[0].height;
+                        const rgba = UTIF.toRGBA8(ifds[0]);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) {
+                          return reject(new Error('Failed to get Canvas 2D context.'));
+                        }
+                        const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+                        ctx.putImageData(imageData, 0, 0);
+                        canvas.toBlob(
+                          (blob) => {
+                            if (blob) resolve(blob);
+                            else reject(new Error('Canvas toBlob failed for TIFF.'));
+                          },
+                          outputMimeType,
+                          0.9
+                        );
+                      } catch (err) {
+                        reject(err);
+                      }
+                    };
+                    reader.onerror = () => reject(new Error(`File Reader error: ${reader.error?.message || 'Unknown read error'}`));
+                    reader.readAsArrayBuffer(file);
+                  } else {
+                    // Existing JPG/PNG conversion logic
                     const img = new Image();
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        if (!e.target?.result) return reject(new Error('File could not be read.'));
-                        img.onload = () => {
-                           const canvas = document.createElement('canvas');
-                           canvas.width = img.naturalWidth;
-                           canvas.height = img.naturalHeight;
-                           const ctx = canvas.getContext('2d');
-                           if (!ctx) return reject(new Error('Failed to get Canvas 2D context.'));
-                           ctx.drawImage(img, 0, 0);
-                           canvas.toBlob((blob) => {
-                               if (blob) {
-                                   resolve(blob);
-                               } else {
-                                   reject(new Error(`Canvas toBlob failed${outputMimeType === 'image/tiff' ? '. TIFF output is likely unsupported.' : '.'}`));
-                               }
-                           }, outputMimeType, 0.9);
-                        };
-                        img.onerror = (errEv) => reject(new Error(`Image could not be loaded: ${typeof errEv === 'string' ? errEv : 'Unknown image load error'}`));
-                        img.src = e.target.result as string;
+                      if (!e.target?.result) return reject(new Error('File could not be read.'));
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return reject(new Error('Failed to get Canvas 2D context.'));
+                        ctx.drawImage(img, 0, 0);
+                        canvas.toBlob((blob) => {
+                          if (blob) {
+                            resolve(blob);
+                          } else {
+                            reject(new Error(`Canvas toBlob failed${outputMimeType === 'image/tiff' ? '. TIFF output is likely unsupported.' : '.'}`));
+                          }
+                        }, outputMimeType, 0.9);
+                      };
+                      img.onerror = (errEv) => reject(new Error(`Image could not be loaded: ${typeof errEv === 'string' ? errEv : 'Unknown image load error'}`));
+                      img.src = e.target.result as string;
                     };
                     reader.onerror = () => reject(new Error(`File Reader error: ${reader.error?.message || 'Unknown read error'}`));
                     reader.readAsDataURL(file);
+                  }
                 });
            }
         }
