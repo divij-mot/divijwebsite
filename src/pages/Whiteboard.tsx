@@ -200,14 +200,19 @@ const Whiteboard: React.FC = () => {
       context.globalAlpha = 0.25;
     }
     if (s.tool === 'eraser') {
-      context.globalCompositeOperation = 'destination-out';
+      context.strokeStyle = '#FFFFFF'; // Use white color for eraser
+      context.fillStyle = '#FFFFFF';   // Also set fill to white
+      context.globalCompositeOperation = 'source-over'; // Use normal drawing mode
+      context.lineWidth = s.width; // Use selected width for eraser
     } else {
       context.globalCompositeOperation = 'source-over';
+      // Set color and width for non-eraser tools
+      context.strokeStyle = s.color;
+      context.fillStyle = s.color;
+      context.lineWidth = s.width;
     }
 
-    context.strokeStyle = s.color;
-    context.fillStyle = s.color;
-    context.lineWidth = s.width;
+    // Removed general color/width setting from here
 
     if (s.tool === 'rect' || s.tool === 'ellipse' || s.tool === 'line') {
       const [p1, p2] = s.points;
@@ -888,14 +893,18 @@ const Whiteboard: React.FC = () => {
           className="w-8 h-8 p-0 border border-neutral-400 rounded"
           title="Stroke colour"
         />
-        <input
-          type="range"
-          min={1}
-          max={20}
-          value={width}
-          onChange={e => setWidth(+e.target.value)}
-          title="Stroke width"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={1}
+            max={100} // Increased max value to 100
+            value={width}
+            onChange={e => setWidth(+e.target.value)}
+            title="Stroke width"
+            className="w-24" // Added width for better layout
+          />
+          <span className="text-sm w-10 text-right">{width}px</span> {/* Added pixel display */}
+        </div>
 
         {/* Divider */}
         <span className="w-px h-6 bg-neutral-400 mx-1" />
