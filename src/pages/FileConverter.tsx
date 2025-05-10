@@ -6,7 +6,7 @@ import { fetchFile } from '@ffmpeg/util'; // toBlobURL is not strictly needed fo
 import { CheckCircle, XCircle, Download, Loader2, FileWarning, AlertCircle, X } from 'lucide-react';
 
 // Define types more robustly
-type SupportedImageInput = 'HEIC' | 'JPG' | 'PNG' | 'TIFF';
+type SupportedImageInput = 'HEIC' | 'JPG' | 'PNG' | 'TIFF' | 'DNG';
 type SupportedVideoInput = 'MP4';
 type SupportedDocumentInput = 'DOCX'; // Keep for future reference
 type SupportedInput = SupportedImageInput | SupportedVideoInput | SupportedDocumentInput;
@@ -145,6 +145,7 @@ const FileConverter: React.FC = () => {
       else if (extension === 'JPG' || extension === 'JPEG') inputFormat = 'JPG';
       else if (extension === 'PNG') inputFormat = 'PNG';
       else if (extension === 'TIFF' || extension === 'TIF') inputFormat = 'TIFF';
+      else if (extension === 'DNG') inputFormat = 'DNG';
       else if (extension === 'MP4') inputFormat = 'MP4';
       else if (extension === 'DOCX') inputFormat = 'DOCX';
 
@@ -222,7 +223,7 @@ const FileConverter: React.FC = () => {
       const input = fileStatus.inputFormat;
       const output = targetFormat;
 
-      if (['HEIC', 'JPG', 'PNG', 'TIFF'].includes(input) && ['JPG', 'PNG', 'TIFF'].includes(output)) return true;
+      if (['HEIC', 'JPG', 'PNG', 'TIFF', 'DNG'].includes(input) && ['JPG', 'PNG', 'TIFF'].includes(output)) return true;
       if (input === 'MP4' && ['MOV', 'MP3', 'WAV'].includes(output)) {
           return ffmpegLoaded; // Depends on FFmpeg being loaded
       }
@@ -291,25 +292,25 @@ const FileConverter: React.FC = () => {
         let outputBlob: Blob | null = null;
 
         // --- Image Conversion (heic2any or Canvas) ---
-        if (inputFormat && ['HEIC', 'JPG', 'PNG', 'TIFF'].includes(inputFormat) && ['JPG', 'PNG', 'TIFF'].includes(selectedOutputFormat)) {
+        if (inputFormat && ['HEIC', 'JPG', 'PNG', 'TIFF', 'DNG'].includes(inputFormat) && ['JPG', 'PNG', 'TIFF'].includes(selectedOutputFormat)) {
             const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
             if (inputFormat === 'HEIC') {
                 console.log(`Converting HEIC ${file.name} to ${selectedOutputFormat}...`);
                 const conversionResult = await heic2any({ blob: file, toType: outputMimeType, quality: 0.85 });
                 outputBlob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
-            } else { // JPG, PNG, TIFF to JPG, PNG, TIFF
+            } else { // JPG, PNG, TIFF, DNG to JPG, PNG, TIFF
                 console.log(`Converting ${inputFormat} ${file.name} to ${selectedOutputFormat} using Canvas...`);
                 if (selectedOutputFormat === 'TIFF') {
                     console.warn("Canvas conversion to TIFF is often unsupported by browsers. This might fail.");
                 }
                 outputBlob = await new Promise<Blob>((resolve, reject) => {
                   const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
-                  if (inputFormat === 'TIFF') {
-                    // Decode TIFF using UTIF.js
+                  if (inputFormat === 'TIFF' || inputFormat === 'DNG') {
+                    // Decode TIFF/DNG using UTIF.js
                     const reader = new FileReader();
                     reader.onload = (e) => {
                       if (!e.target?.result || !(e.target.result instanceof ArrayBuffer)) {
-                        return reject(new Error('TIFF file could not be read.'));
+                        return reject(new Error(`${inputFormat} file could not be read.`));
                       }
                       try {
                         const buffer = e.target.result as ArrayBuffer;
@@ -330,7 +331,7 @@ const FileConverter: React.FC = () => {
                         canvas.toBlob(
                           (blob) => {
                             if (blob) resolve(blob);
-                            else reject(new Error('Canvas toBlob failed for TIFF.'));
+                            else reject(new Error(`Canvas toBlob failed for ${inputFormat}.`));
                           },
                           outputMimeType,
                           0.9
@@ -484,9 +485,9 @@ const FileConverter: React.FC = () => {
                          onChange={handleFileChange}
                          className="block w-full text-sm text-neutral-500 dark:text-neutral-400 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 cursor-pointer border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700 p-1"
                          disabled={isProcessing}
-                         accept=".heic,.jpg,.jpeg,.png,.tiff,.tif,.mp4"
+                         accept=".heic,.jpg,.jpeg,.png,.tiff,.tif,.dng,.mp4"
                      />
-                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">HEIC, JPG, PNG, TIFF, MP4</p>
+                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">HEIC, JPG, PNG, TIFF, DNG, MP4</p>
                  </div>
                  {/* End Reverted File Input Button Area */}
 
