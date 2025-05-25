@@ -31,9 +31,12 @@ interface ReceivedFile { id: string; name: string; size: number; blob: Blob; fro
 interface FileTransferProgress {
   [key: string]: {
     progress: number;
-    status: 'sending' | 'receiving' | 'complete' | 'failed';
+    status: 'sending' | 'receiving' | 'complete' | 'failed' | 'pending';
     fileName?: string;
     fileSize?: number;
+    peerId?: string;
+    fileId?: string;
+    fileType?: string;
   };
 }
 
@@ -976,7 +979,6 @@ if (!isNameSet && !forceConnect) {
     setServerError(null);
 
     const fileInfoMessage = JSON.stringify({ type: 'file-info', fileId, name: fileName, size: fileSize, fileType });
-    const BUFFER_THRESHOLD = FILE_CHUNK_SIZE * 4; // 256KB buffer threshold
 
     // --- FIX: Set initial progress state BEFORE reading the file ---
     connectedPeers.forEach(conn => {
@@ -1035,11 +1037,20 @@ if (!isNameSet && !forceConnect) {
 
       let base64Chunk;
       try {
-          const binaryString = String.fromCharCode.apply(null, Array.from(new Uint8Array(chunkBuffer)));
+          // Convert ArrayBuffer to base64 without stack overflow for large chunks
+          const uint8Array = new Uint8Array(chunkBuffer);
+          let binaryString = '';
+          const chunkSize = 65536; // Process in 64KB sub-chunks to avoid stack overflow while staying fast
+          
+          for (let j = 0; j < uint8Array.length; j += chunkSize) {
+              const slice = uint8Array.slice(j, j + chunkSize);
+              binaryString += String.fromCharCode.apply(null, Array.from(slice));
+          }
+          
           base64Chunk = btoa(binaryString);
       } catch (error) {
            console.error(`Error encoding chunk ${i} to base64:`, error);
-           setServerError(`Error processing file chunk ${i+1}.`);
+           setServerError(`Error processing file chunk ${i+1}: ${error.message}`);
            connectedPeers.forEach(conn => {
                const transferKey = `${fileId}_${conn.peerId}`;
                setSendProgress(prev => ({ ...prev, [transferKey]: { ...(prev[transferKey] || {}), status: 'failed', fileName, fileSize } }));
@@ -1129,14 +1140,12 @@ if (!isNameSet && !forceConnect) {
         // Wait for all send attempts for the current chunk to resolve (or reject)
         await Promise.all(sendPromises);
       }
-    }
 
       // After loop completion
       console.log(`Finished iterating through chunks for ${fileName}`);
       addChatMessage(`Sent file: ${fileName}`, 'system');
       setSelectedFile(null); // Clear selected file state
       if (fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
-    ;
   // Depends on selectedFile state and stable functions
   }, [selectedFile, addChatMessage, sendMessageToServer]);
 
@@ -1495,14 +1504,3 @@ if (!isNameSet && !forceConnect) {
 };
 
 export default Share;
-// --- END OF FILE Share.tsx ---
-
-// --- Type Updates ---
-interface ChatMessage {
- id: string;
- text: string;
- sender: string; // 'me', 'system', or peerId
- senderName?: string; // Display name
- timestamp: number;
-}
-// --- END OF FILE Share.tsx ---
