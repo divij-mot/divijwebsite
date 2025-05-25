@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 256 * 1024; // 256KB chunks for better performance
+const FILE_CHUNK_SIZE = 64 * 1024; // 64KB chunks for better reliability
 
 // Types
 interface PeerConnection {
@@ -1075,31 +1075,68 @@ if (!isNameSet && !forceConnect) {
       return;
     }
     
-    const { file, fileName, fileSize, totalChunks } = fileData;
+    const { file, fileName, fileSize } = fileData;
     const transferKey = `${fileId}_${peerId}`;
+    const totalChunks = Math.ceil(fileSize / FILE_CHUNK_SIZE);
     
-    // Wait for receiver to be ready
+    // Wait longer for receiver to be ready and connection to stabilize
     console.log(`Waiting before sending chunks for ${fileName} to ${peerId}...`);
-    await new Promise(resolve => setTimeout(resolve, 300)); // Reduced to 300ms
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Increased to 1 second
     
-    // Check if peer is still connected
-    const peerConn = peerConnectionsRef.current[peerId];
+    // Check if peer is still connected with retry
+    let retryCount = 0;
+    let peerConn = peerConnectionsRef.current[peerId];
+    
+    while ((!peerConn || peerConn.status !== 'connected') && retryCount < 3) {
+      console.log(`Peer ${peerId} not ready, retrying... (${retryCount + 1}/3)`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      peerConn = peerConnectionsRef.current[peerId];
+      retryCount++;
+    }
+    
     if (!peerConn || peerConn.status !== 'connected') {
-      console.error(`Peer ${peerId} not connected for file transfer`);
+      console.error(`Peer ${peerId} not connected for file transfer after retries`);
       setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+      addChatMessage(`Failed to send file to ${peerConnectionsRef.current[peerId]?.name || peerId}: Connection lost`, 'system');
       return;
     }
+    
+    // Check if data channel is ready
+    const dataChannel = (peerConn.peer as any)._channel;
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+      console.log(`Data channel not ready, waiting...`);
+      // Wait for data channel to be ready
+      let channelRetries = 0;
+      while (channelRetries < 10) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const currentChannel = (peerConnectionsRef.current[peerId]?.peer as any)?._channel;
+        if (currentChannel && currentChannel.readyState === 'open') {
+          console.log(`Data channel is now ready`);
+          break;
+        }
+        channelRetries++;
+      }
+      
+      // Final check
+      const finalChannel = (peerConnectionsRef.current[peerId]?.peer as any)?._channel;
+      if (!finalChannel || finalChannel.readyState !== 'open') {
+        console.error(`Data channel still not ready after waiting`);
+        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        addChatMessage(`Failed to send file to ${peerConnectionsRef.current[peerId]?.name || peerId}: Channel not ready`, 'system');
+        return;
+      }
+    }
+    
+    // Adaptive sending parameters
+    let consecutiveSuccesses = 0;
+    let sendDelay = 50; // Start with 50ms delay for stability
+    const minDelay = 10; // Minimum 10ms to avoid overwhelming
+    const maxDelay = 200; // Max 200ms for slow connections
     
     // Update status to 'sending'
     setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'sending' } }));
     
     console.log(`Starting to send ${fileName} to ${peerId}. Total chunks: ${totalChunks}`);
-    
-    // Adaptive sending parameters
-    let consecutiveSuccesses = 0;
-    let sendDelay = 20; // Start with 20ms delay
-    const minDelay = 0; // Can go down to 0ms for fast connections
-    const maxDelay = 100; // Max 100ms for slow connections
     
     // Send chunks with adaptive speed
     for (let i = 0; i < totalChunks; i++) {
@@ -1173,7 +1210,7 @@ if (!isNameSet && !forceConnect) {
       
       // Adaptive buffer management
       const bufferAmount = dataChannel.bufferedAmount;
-      const bufferThreshold = 1024 * 1024; // 1MB threshold
+      const bufferThreshold = 512 * 1024; // 512KB threshold for better flow control
       
       // If buffer is getting full, increase delay
       if (bufferAmount > bufferThreshold) {
@@ -1214,6 +1251,7 @@ if (!isNameSet && !forceConnect) {
       });
       
       try {
+        // Add error handling for send failures
         currentPeerConn.peer.send(chunkMessage);
         
         // Update progress
@@ -1251,10 +1289,40 @@ if (!isNameSet && !forceConnect) {
             delete fileChunksRef.current[`file_${fileId}`];
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error sending chunk ${i} to ${peerId}:`, error);
-        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
-        return;
+        
+        // Check if it's a specific error we can handle
+        if (error.message && error.message.includes('Failure to send data')) {
+          // Try to recover by waiting and retrying once
+          console.log(`Attempting to recover from send failure at chunk ${i}`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Check connection again
+          const retryConn = peerConnectionsRef.current[peerId];
+          const retryChannel = (retryConn?.peer as any)?._channel;
+          
+          if (retryConn?.status === 'connected' && retryChannel?.readyState === 'open') {
+            try {
+              console.log(`Retrying chunk ${i}`);
+              retryConn.peer.send(chunkMessage);
+              // If retry succeeds, continue
+            } catch (retryError) {
+              console.error(`Retry failed for chunk ${i}:`, retryError);
+              setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+              addChatMessage(`File transfer failed at ${Math.round((i / totalChunks) * 100)}%`, 'system');
+              return;
+            }
+          } else {
+            setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+            addChatMessage(`File transfer failed: Connection lost`, 'system');
+            return;
+          }
+        } else {
+          setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+          addChatMessage(`File transfer failed: ${error.message || 'Unknown error'}`, 'system');
+          return;
+        }
       }
     }
   }, [addChatMessage]);
