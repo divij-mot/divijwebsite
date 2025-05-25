@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 64 * 1024; // 64KB chunks
+const FILE_CHUNK_SIZE = 1024 * 1024; // 1MB chunks for large file performance
 
 // Types
 interface PeerConnection {
@@ -990,8 +990,9 @@ if (!isNameSet && !forceConnect) {
                         let retryCount = 0;
                         const maxRetries = 50; // Max 5 seconds wait
                         
-                        while (dataChannel.bufferedAmount > FILE_CHUNK_SIZE * 4 && retryCount < maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+                        // RTCDataChannel buffer is typically 16MB, so we use 12MB threshold for safety
+                        while (dataChannel.bufferedAmount > 12 * 1024 * 1024 && retryCount < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 25)); // Wait 25ms (faster polling)
                             retryCount++;
                             
                             // Re-check peer status during wait
@@ -1007,9 +1008,10 @@ if (!isNameSet && !forceConnect) {
                         }
                     }
 
-                    // Adaptive delay based on chunk index to prevent overwhelming
-                    const adaptiveDelay = Math.min(50, Math.max(5, Math.floor(i / 10))); // 5ms to 50ms
-                    await new Promise(resolve => setTimeout(resolve, adaptiveDelay));
+                    // Minimal delay for high throughput - only for very large files
+                    if (i % 20 === 0 && totalChunks > 100) { // Only delay every 20th chunk for large files
+                        await new Promise(resolve => setTimeout(resolve, 1)); // 1ms delay
+                    }
 
                      // Re-check status in case peer disconnected while waiting
                      if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
@@ -1024,7 +1026,7 @@ if (!isNameSet && !forceConnect) {
                     const progress = Math.round(((i + 1) / totalChunks) * 100);
                     const isComplete = i === totalChunks - 1;
 
-                    // Update progress state periodically or on completion
+                    // Update progress state at 5% intervals
                      if (progress % 5 === 0 || isComplete) {
                           setSendProgress(prev => {
                               const current = prev[transferKey];
