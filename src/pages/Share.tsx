@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 1024 * 1024; // 1MB chunks for much faster transfers
+const FILE_CHUNK_SIZE = 256 * 1024; // 256KB chunks - maximum safe size for WebRTC data channels
 
 // Types
 interface PeerConnection {
@@ -1152,9 +1152,9 @@ if (!isNameSet && !forceConnect) {
     const transferKey = `${fileId}_${peerId}`;
     const totalChunks = Math.ceil(fileSize / FILE_CHUNK_SIZE);
     
-    // Wait for receiver to be ready and connection to stabilize
-    console.log(`Waiting before sending chunks for ${fileName} to ${peerId}...`);
-    await new Promise(resolve => setTimeout(resolve, 200)); // Reduced from 1 second for faster starts
+    // Minimal wait for receiver to be ready
+    console.log(`Starting to send chunks for ${fileName} to ${peerId}...`);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Minimal wait for maximum speed
     
     // Check if peer is still connected with retry
     let retryCount = 0;
@@ -1202,9 +1202,9 @@ if (!isNameSet && !forceConnect) {
     
     // Adaptive sending parameters
     let consecutiveSuccesses = 0;
-    let sendDelay = 20; // Reduced from 50ms since we have fewer chunks now
-    const minDelay = 5; // Reduced minimum delay
-    const maxDelay = 100; // Reduced max delay for faster transfers
+    let sendDelay = 10; // Very low initial delay for 256KB chunks
+    const minDelay = 0; // No minimum delay for maximum speed
+    const maxDelay = 50; // Low max delay for fast transfers
     
     // Update status to 'sending'
     setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'sending' } }));
@@ -1248,9 +1248,9 @@ if (!isNameSet && !forceConnect) {
       let base64Chunk;
       try {
         const uint8Array = new Uint8Array(chunkBuffer);
-        // For 1MB chunks, we need to handle encoding more carefully
+        // For 256KB chunks, we need to handle encoding more carefully
         let binaryString = '';
-        const encodeChunkSize = 32768; // Increased from 8KB to 32KB for faster encoding
+        const encodeChunkSize = 16384; // 16KB sub-chunks for encoding
         
         for (let j = 0; j < uint8Array.length; j += encodeChunkSize) {
           const subEnd = Math.min(j + encodeChunkSize, uint8Array.length);
@@ -1283,18 +1283,18 @@ if (!isNameSet && !forceConnect) {
       
       // Adaptive buffer management
       const bufferAmount = dataChannel.bufferedAmount;
-      const bufferThreshold = 2 * 1024 * 1024; // Increased to 2MB for 1MB chunks
+      const bufferThreshold = 1024 * 1024; // 1MB buffer threshold for 256KB chunks
       
       // If buffer is getting full, increase delay
       if (bufferAmount > bufferThreshold) {
         consecutiveSuccesses = 0;
-        sendDelay = Math.min(sendDelay * 1.5, maxDelay); // Less aggressive increase
+        sendDelay = Math.min(sendDelay + 10, maxDelay); // More gradual increase
         console.log(`Buffer high (${formatFileSize(bufferAmount)}), increasing delay to ${sendDelay}ms`);
         
         // Wait for buffer to clear
         let waitCount = 0;
-        while (dataChannel.bufferedAmount > bufferThreshold / 2 && waitCount < 50) { // Reduced wait iterations
-          await new Promise(resolve => setTimeout(resolve, 20)); // Reduced wait time
+        while (dataChannel.bufferedAmount > bufferThreshold / 2 && waitCount < 30) { // Even fewer wait iterations
+          await new Promise(resolve => setTimeout(resolve, 10)); // Very short wait time
           waitCount++;
           
           if (peerConnectionsRef.current[peerId]?.status !== 'connected') {
@@ -1306,9 +1306,9 @@ if (!isNameSet && !forceConnect) {
       } else if (bufferAmount < bufferThreshold / 4) {
         // Buffer is low, we can speed up
         consecutiveSuccesses++;
-        if (consecutiveSuccesses > 3) { // Reduced from 5 for faster adaptation
+        if (consecutiveSuccesses > 2) { // Even faster adaptation
           sendDelay = Math.max(sendDelay - 5, minDelay); // Decrease delay
-          if (i % 10 === 0) { // Log less frequently with larger chunks
+          if (i % 20 === 0) { // Log less frequently
             console.log(`Buffer low (${formatFileSize(bufferAmount)}), decreasing delay to ${sendDelay}ms`);
           }
         }
