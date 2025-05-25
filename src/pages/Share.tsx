@@ -1050,7 +1050,7 @@ if (!isNameSet && !forceConnect) {
           base64Chunk = btoa(binaryString);
       } catch (error) {
            console.error(`Error encoding chunk ${i} to base64:`, error);
-           setServerError(`Error processing file chunk ${i+1}: ${error.message}`);
+           setServerError(`Error processing file chunk ${i+1}: ${error instanceof Error ? error.message : String(error)}`);
            connectedPeers.forEach(conn => {
                const transferKey = `${fileId}_${conn.peerId}`;
                setSendProgress(prev => ({ ...prev, [transferKey]: { ...(prev[transferKey] || {}), status: 'failed', fileName, fileSize } }));
@@ -1139,7 +1139,7 @@ if (!isNameSet && !forceConnect) {
 
         // Wait for all send attempts for the current chunk to resolve (or reject)
         await Promise.all(sendPromises);
-      }
+      } // This closing brace was missing for the for loop
 
       // After loop completion
       console.log(`Finished iterating through chunks for ${fileName}`);
