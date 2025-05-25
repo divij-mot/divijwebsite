@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 16 * 1024; // Reduced to 16KB chunks to prevent data channel overflow
+const FILE_CHUNK_SIZE = 256 * 1024; // 256KB chunks for better performance
 
 // Types
 interface PeerConnection {
@@ -793,8 +793,8 @@ if (!isNameSet && !forceConnect) {
 
       console.log(`[Chunk ${index}] Received for ${transferKey}. TransferData exists: ${!!transferData}, Progress status: ${progressData?.status}`);
 
-      // Only accept chunks if file was accepted
-      if (transferData && progressData?.status === 'receiving') {
+      // Only accept chunks if file was accepted and receiving
+      if (transferData && progressData && progressData.status === 'receiving') {
         try {
             const byteString = atob(chunk);
             const byteArray = new Uint8Array(byteString.length);
@@ -1074,9 +1074,9 @@ if (!isNameSet && !forceConnect) {
     const { file, fileName, fileSize, totalChunks } = fileData;
     const transferKey = `${fileId}_${peerId}`;
     
-    // Wait longer to ensure receiver has initialized file chunks storage
+    // Wait for receiver to be ready
     console.log(`Waiting before sending chunks for ${fileName} to ${peerId}...`);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Increased to 500ms
+    await new Promise(resolve => setTimeout(resolve, 300)); // Reduced to 300ms
     
     // Check if peer is still connected
     const peerConn = peerConnectionsRef.current[peerId];
@@ -1091,7 +1091,13 @@ if (!isNameSet && !forceConnect) {
     
     console.log(`Starting to send ${fileName} to ${peerId}. Total chunks: ${totalChunks}`);
     
-    // Send chunks with proper error handling
+    // Adaptive sending parameters
+    let consecutiveSuccesses = 0;
+    let sendDelay = 20; // Start with 20ms delay
+    const minDelay = 0; // Can go down to 0ms for fast connections
+    const maxDelay = 100; // Max 100ms for slow connections
+    
+    // Send chunks with adaptive speed
     for (let i = 0; i < totalChunks; i++) {
       const start = i * FILE_CHUNK_SIZE;
       const end = Math.min(start + FILE_CHUNK_SIZE, file.size);
@@ -1124,12 +1130,20 @@ if (!isNameSet && !forceConnect) {
       
       if (!chunkBuffer) return;
       
-      // Convert to base64 - use smaller encoding chunks to prevent issues
+      // Convert to base64
       let base64Chunk;
       try {
         const uint8Array = new Uint8Array(chunkBuffer);
-        // Direct conversion for small chunks
-        const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
+        // For 64KB chunks, we need to handle encoding more carefully
+        let binaryString = '';
+        const encodeChunkSize = 8192; // 8KB sub-chunks for encoding
+        
+        for (let j = 0; j < uint8Array.length; j += encodeChunkSize) {
+          const subEnd = Math.min(j + encodeChunkSize, uint8Array.length);
+          const subArray = uint8Array.subarray(j, subEnd);
+          binaryString += String.fromCharCode.apply(null, Array.from(subArray));
+        }
+        
         base64Chunk = btoa(binaryString);
       } catch (error) {
         console.error(`Error encoding chunk ${i}:`, error);
@@ -1145,17 +1159,29 @@ if (!isNameSet && !forceConnect) {
         return;
       }
       
-      // Buffer management - use lower threshold for stability
+      // Check data channel and buffer
       const dataChannel = (currentPeerConn.peer as any)._channel;
-      if (dataChannel && dataChannel.readyState === 'open') {
-        // Wait for buffer to clear if needed
-        let retryCount = 0;
-        const maxRetries = 200; // 10 seconds max wait
-        const bufferThreshold = 256 * 1024; // 256KB threshold
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        console.error(`Data channel not ready for peer ${peerId}`);
+        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        return;
+      }
+      
+      // Adaptive buffer management
+      const bufferAmount = dataChannel.bufferedAmount;
+      const bufferThreshold = 1024 * 1024; // 1MB threshold
+      
+      // If buffer is getting full, increase delay
+      if (bufferAmount > bufferThreshold) {
+        consecutiveSuccesses = 0;
+        sendDelay = Math.min(sendDelay * 2, maxDelay); // Double delay, up to max
+        console.log(`Buffer high (${formatFileSize(bufferAmount)}), increasing delay to ${sendDelay}ms`);
         
-        while (dataChannel.bufferedAmount > bufferThreshold && retryCount < maxRetries) {
+        // Wait for buffer to clear
+        let waitCount = 0;
+        while (dataChannel.bufferedAmount > bufferThreshold / 2 && waitCount < 100) {
           await new Promise(resolve => setTimeout(resolve, 50));
-          retryCount++;
+          waitCount++;
           
           if (peerConnectionsRef.current[peerId]?.status !== 'connected') {
             console.log(`Peer ${peerId} disconnected while waiting for buffer`);
@@ -1163,19 +1189,18 @@ if (!isNameSet && !forceConnect) {
             return;
           }
         }
-        
-        if (retryCount >= maxRetries) {
-          console.error(`Buffer timeout for peer ${peerId}`);
-          setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
-          return;
+      } else if (bufferAmount < bufferThreshold / 4) {
+        // Buffer is low, we can speed up
+        consecutiveSuccesses++;
+        if (consecutiveSuccesses > 5) {
+          sendDelay = Math.max(sendDelay - 5, minDelay); // Decrease delay
+          if (i % 50 === 0) {
+            console.log(`Buffer low (${formatFileSize(bufferAmount)}), decreasing delay to ${sendDelay}ms`);
+          }
         }
-      } else {
-        console.error(`Data channel not ready for peer ${peerId}`);
-        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
-        return;
       }
       
-      // Send chunk with error handling
+      // Send chunk
       const chunkMessage = JSON.stringify({
         type: 'file-chunk',
         fileId,
@@ -1197,9 +1222,9 @@ if (!isNameSet && !forceConnect) {
           return prev;
         });
         
-        // Small delay between chunks to prevent overwhelming the channel
-        if (i < totalChunks - 1) {
-          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay between chunks
+        // Adaptive delay between chunks
+        if (i < totalChunks - 1 && sendDelay > 0) {
+          await new Promise(resolve => setTimeout(resolve, sendDelay));
         }
         
         if (i === totalChunks - 1) {
@@ -1250,11 +1275,15 @@ if (!isNameSet && !forceConnect) {
       fileType: progressData.fileType 
     };
     
-    // Update status to receiving
-    setReceiveProgress(prev => ({ 
-      ...prev, 
-      [transferKey]: { ...prev[transferKey], status: 'receiving' } 
-    }));
+    // Update status to receiving - use functional update to ensure it's applied
+    setReceiveProgress(prev => {
+      const updated = { 
+        ...prev, 
+        [transferKey]: { ...prev[transferKey], status: 'receiving' as const } 
+      };
+      console.log(`Updated receive progress for ${transferKey} to 'receiving'`);
+      return updated;
+    });
     
     console.log(`File chunks initialized for ${transferKey}. Sending acceptance to sender...`);
     
@@ -1265,8 +1294,13 @@ if (!isNameSet && !forceConnect) {
       return;
     }
     
-    // Add a small delay to ensure state updates are processed
+    // Add a delay to ensure state updates are processed
     setTimeout(() => {
+      // Double-check that everything is ready
+      const currentProgress = receiveProgress[transferKey];
+      const currentTransferData = fileChunksRef.current[transferKey];
+      console.log(`Before sending acceptance - Progress status: ${currentProgress?.status}, Transfer data exists: ${!!currentTransferData}`);
+      
       const acceptMessage = JSON.stringify({ 
         type: 'file-accepted', 
         fileId: progressData.fileId, 
@@ -1282,7 +1316,7 @@ if (!isNameSet && !forceConnect) {
           console.error(`Failed to send file acceptance to ${senderId}:`, error);
         }
       }
-    }, 100); // 100ms delay to ensure initialization is complete
+    }, 200); // Increased to 200ms to ensure state is updated
     
     addChatMessage(`Accepting file: ${progressData.fileName}`, 'system');
   }, [receiveProgress, addChatMessage]);
