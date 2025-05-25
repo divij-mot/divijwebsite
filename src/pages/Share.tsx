@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 256 * 1024; // 256KB chunks - maximum safe size for WebRTC data channels
+const FILE_CHUNK_SIZE = 128 * 1024; // 128KB chunks - safe size that accounts for base64 encoding overhead
 
 // Types
 interface PeerConnection {
@@ -1152,9 +1152,9 @@ if (!isNameSet && !forceConnect) {
     const transferKey = `${fileId}_${peerId}`;
     const totalChunks = Math.ceil(fileSize / FILE_CHUNK_SIZE);
     
-    // Minimal wait for receiver to be ready
-    console.log(`Starting to send chunks for ${fileName} to ${peerId}...`);
-    await new Promise(resolve => setTimeout(resolve, 100)); // Minimal wait for maximum speed
+    // Wait longer for receiver to be ready and connection to stabilize
+    console.log(`Waiting before sending chunks for ${fileName} to ${peerId}...`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Give receiver time to initialize
     
     // Check if peer is still connected with retry
     let retryCount = 0;
@@ -1200,9 +1200,12 @@ if (!isNameSet && !forceConnect) {
       }
     }
     
+    // Add a small delay after channel is confirmed ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Adaptive sending parameters
     let consecutiveSuccesses = 0;
-    let sendDelay = 10; // Very low initial delay for 256KB chunks
+    let sendDelay = 10; // Very low initial delay for 128KB chunks
     const minDelay = 0; // No minimum delay for maximum speed
     const maxDelay = 50; // Low max delay for fast transfers
     
@@ -1248,7 +1251,7 @@ if (!isNameSet && !forceConnect) {
       let base64Chunk;
       try {
         const uint8Array = new Uint8Array(chunkBuffer);
-        // For 256KB chunks, we need to handle encoding more carefully
+        // For 128KB chunks, we need to handle encoding carefully
         let binaryString = '';
         const encodeChunkSize = 16384; // 16KB sub-chunks for encoding
         
@@ -1283,7 +1286,7 @@ if (!isNameSet && !forceConnect) {
       
       // Adaptive buffer management
       const bufferAmount = dataChannel.bufferedAmount;
-      const bufferThreshold = 1024 * 1024; // 1MB buffer threshold for 256KB chunks
+      const bufferThreshold = 768 * 1024; // 768KB buffer threshold for 128KB chunks
       
       // If buffer is getting full, increase delay
       if (bufferAmount > bufferThreshold) {
@@ -1323,11 +1326,20 @@ if (!isNameSet && !forceConnect) {
         isLast: i === totalChunks - 1
       });
       
+      // Check message size (WebRTC has limits on message size)
+      const messageSize = new Blob([chunkMessage]).size;
+      if (messageSize > 256 * 1024) {
+        console.error(`Chunk ${i} message too large: ${formatFileSize(messageSize)}. Base64 encoding increased size too much.`);
+        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        addChatMessage(`File transfer failed: Chunk size too large after encoding`, 'system');
+        return;
+      }
+      
       try {
         // Add error handling for send failures
         currentPeerConn.peer.send(chunkMessage);
         
-        // Update progress on every chunk since we have fewer with 1MB chunks
+        // Update progress on every chunk since we have fewer with 256KB chunks
         const progress = Math.round(((i + 1) / totalChunks) * 100);
         setSendProgress(prev => {
           const current = prev[transferKey];
