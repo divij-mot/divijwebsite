@@ -80,6 +80,7 @@ const Share: React.FC = () => {
   const fileChunksRef = useRef<Record<string, any>>({});
   const peerConnectionsRef = useRef(peerConnections);
   const sendFileChunksRef = useRef<((fileId: string, peerId: string) => Promise<void>) | null>(null);
+  const sendProgressRef = useRef(sendProgress);
   // Refs to hold latest state values for use in callbacks without causing dependency loops
   const userIdRef = useRef(userId);
   const userNameRef = useRef(userName);
@@ -89,6 +90,9 @@ const Share: React.FC = () => {
   useEffect(() => {
     peerConnectionsRef.current = peerConnections;
   }, [peerConnections]);
+  useEffect(() => {
+    sendProgressRef.current = sendProgress;
+  }, [sendProgress]);
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
@@ -1236,9 +1240,10 @@ if (!isNameSet && !forceConnect) {
           fileData.acceptedPeers.add(peerId);
           
           // Clean up if all transfers are done
-          const allPendingTransfers = Object.keys(sendProgress).filter(key => key.startsWith(`${fileId}_`));
+          const currentSendProgress = sendProgressRef.current;
+          const allPendingTransfers = Object.keys(currentSendProgress).filter(key => key.startsWith(`${fileId}_`));
           const allComplete = allPendingTransfers.every(key => {
-            const progress = sendProgress[key];
+            const progress = currentSendProgress[key];
             return progress.status === 'complete' || progress.status === 'failed' || progress.status === 'declined';
           });
           
@@ -1252,7 +1257,7 @@ if (!isNameSet && !forceConnect) {
         return;
       }
     }
-  }, [addChatMessage, sendProgress]);
+  }, [addChatMessage]);
 
   // Set the ref so handlePeerData can use it
   useEffect(() => {
