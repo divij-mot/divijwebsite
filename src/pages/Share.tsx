@@ -791,6 +791,8 @@ if (!isNameSet && !forceConnect) {
       const transferData = fileChunksRef.current[transferKey];
       const progressData = receiveProgress[transferKey];
 
+      console.log(`[Chunk ${index}] Received for ${transferKey}. TransferData exists: ${!!transferData}, Progress status: ${progressData?.status}`);
+
       // Only accept chunks if file was accepted
       if (transferData && progressData?.status === 'receiving') {
         try {
@@ -1072,8 +1074,9 @@ if (!isNameSet && !forceConnect) {
     const { file, fileName, fileSize, totalChunks } = fileData;
     const transferKey = `${fileId}_${peerId}`;
     
-    // Wait a bit to ensure data channel is ready
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wait longer to ensure receiver has initialized file chunks storage
+    console.log(`Waiting before sending chunks for ${fileName} to ${peerId}...`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Increased to 500ms
     
     // Check if peer is still connected
     const peerConn = peerConnectionsRef.current[peerId];
@@ -1235,7 +1238,9 @@ if (!isNameSet && !forceConnect) {
     const progressData = receiveProgress[transferKey];
     if (!progressData || progressData.status !== 'pending') return;
     
-    // Initialize file chunks storage
+    console.log(`Accepting file with transferKey: ${transferKey}`, progressData);
+    
+    // Initialize file chunks storage FIRST
     fileChunksRef.current[transferKey] = { 
       chunks: [], 
       receivedBytes: 0, 
@@ -1251,27 +1256,33 @@ if (!isNameSet && !forceConnect) {
       [transferKey]: { ...prev[transferKey], status: 'receiving' } 
     }));
     
-    // Send acceptance notification to sender
+    console.log(`File chunks initialized for ${transferKey}. Sending acceptance to sender...`);
+    
+    // Send acceptance notification to sender AFTER initialization
     const senderId = progressData.peerId;
     if (!senderId) {
       console.error('No sender ID found for file acceptance');
       return;
     }
     
-    const acceptMessage = JSON.stringify({ 
-      type: 'file-accepted', 
-      fileId: progressData.fileId, 
-      fileName: progressData.fileName 
-    });
-    
-    const senderConn = peerConnectionsRef.current[senderId];
-    if (senderConn?.peer && senderConn.status === 'connected') {
-      try {
-        senderConn.peer.send(acceptMessage);
-      } catch (error) {
-        console.error(`Failed to send file acceptance to ${senderId}:`, error);
+    // Add a small delay to ensure state updates are processed
+    setTimeout(() => {
+      const acceptMessage = JSON.stringify({ 
+        type: 'file-accepted', 
+        fileId: progressData.fileId, 
+        fileName: progressData.fileName 
+      });
+      
+      const senderConn = peerConnectionsRef.current[senderId];
+      if (senderConn?.peer && senderConn.status === 'connected') {
+        try {
+          senderConn.peer.send(acceptMessage);
+          console.log(`Sent acceptance for file ${progressData.fileName} to ${senderId}`);
+        } catch (error) {
+          console.error(`Failed to send file acceptance to ${senderId}:`, error);
+        }
       }
-    }
+    }, 100); // 100ms delay to ensure initialization is complete
     
     addChatMessage(`Accepting file: ${progressData.fileName}`, 'system');
   }, [receiveProgress, addChatMessage]);
