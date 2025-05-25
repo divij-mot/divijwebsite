@@ -784,6 +784,17 @@ if (!isNameSet && !forceConnect) {
             transferData.chunks.push(byteArray);
             transferData.receivedBytes += byteArray.length;
 
+            // Send acknowledgment back to sender
+            const ackMessage = JSON.stringify({ type: 'chunk-ack', fileId, index });
+            const senderConn = peerConnectionsRef.current[peerId];
+            if (senderConn?.peer && senderConn.status === 'connected') {
+                try {
+                    senderConn.peer.send(ackMessage);
+                } catch (error) {
+                    console.error(`Failed to send chunk acknowledgment to ${peerId}:`, error);
+                }
+            }
+
             const progress = transferData.totalSize > 0 ? Math.round((transferData.receivedBytes / transferData.totalSize) * 100) : 0;
             if (progress % 5 === 0 || isLast) {
                 setReceiveProgress(prev => {
@@ -819,6 +830,10 @@ if (!isNameSet && !forceConnect) {
       } else {
         console.warn(`Received chunk for unknown/completed transfer: ${transferKey}. Index: ${index}`);
       }
+    } else if (type === 'chunk-ack') {
+      // Handle chunk acknowledgment - currently just log, could be used for retry logic
+      const { fileId, index } = message;
+      console.log(`[ACK] Chunk ${index} acknowledged by ${peerId} for file ${fileId}`);
     } else {
         console.warn(`Unknown data type received from peer ${peerId}: ${type}`);
     }
@@ -968,9 +983,33 @@ if (!isNameSet && !forceConnect) {
 
             if (peerStatus === 'connected') {
                 try {
-                    // Introduce a small delay before sending the next chunk to act as rate limiting
-                    // Adjust the delay (e.g., 10ms) as needed based on testing performance
-                    await new Promise(resolve => setTimeout(resolve, 5)); // 5ms delay
+                    // Check RTCDataChannel buffer before sending
+                    const dataChannel = (conn.peer as any)._channel;
+                    if (dataChannel) {
+                        // Wait for buffer to be below threshold before sending
+                        let retryCount = 0;
+                        const maxRetries = 50; // Max 5 seconds wait
+                        
+                        while (dataChannel.bufferedAmount > FILE_CHUNK_SIZE * 4 && retryCount < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+                            retryCount++;
+                            
+                            // Re-check peer status during wait
+                            if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
+                                console.log(`[Chunk ${i}, Peer ${conn.peerId}] Peer disconnected while waiting for buffer.`);
+                                throw new Error("Peer disconnected while waiting for buffer");
+                            }
+                        }
+                        
+                        if (retryCount >= maxRetries) {
+                            console.error(`[Chunk ${i}, Peer ${conn.peerId}] Buffer timeout - cannot send chunk`);
+                            throw new Error("Buffer timeout - unable to send chunk");
+                        }
+                    }
+
+                    // Adaptive delay based on chunk index to prevent overwhelming
+                    const adaptiveDelay = Math.min(50, Math.max(5, Math.floor(i / 10))); // 5ms to 50ms
+                    await new Promise(resolve => setTimeout(resolve, adaptiveDelay));
 
                      // Re-check status in case peer disconnected while waiting
                      if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
