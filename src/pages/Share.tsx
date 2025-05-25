@@ -81,6 +81,7 @@ const Share: React.FC = () => {
   const peerConnectionsRef = useRef(peerConnections);
   const sendFileChunksRef = useRef<((fileId: string, peerId: string) => Promise<void>) | null>(null);
   const sendProgressRef = useRef(sendProgress);
+  const receiveProgressRef = useRef(receiveProgress); // Add ref for receiveProgress
   // Refs to hold latest state values for use in callbacks without causing dependency loops
   const userIdRef = useRef(userId);
   const userNameRef = useRef(userName);
@@ -93,6 +94,9 @@ const Share: React.FC = () => {
   useEffect(() => {
     sendProgressRef.current = sendProgress;
   }, [sendProgress]);
+  useEffect(() => {
+    receiveProgressRef.current = receiveProgress;
+  }, [receiveProgress]);
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
@@ -793,7 +797,8 @@ if (!isNameSet && !forceConnect) {
       const { fileId, chunk, index, isLast } = message;
       const transferKey = `${peerId}_${fileId}`;
       const transferData = fileChunksRef.current[transferKey];
-      const progressData = receiveProgress[transferKey];
+      // Use ref to get the most current progress data
+      const progressData = receiveProgressRef.current[transferKey];
 
       console.log(`[Chunk ${index}] Received for ${transferKey}. TransferData exists: ${!!transferData}, Progress status: ${progressData?.status}`);
 
@@ -893,8 +898,75 @@ if (!isNameSet && !forceConnect) {
       } else if (progressData?.status === 'pending') {
         // Ignore chunks for pending (not yet accepted) files
         console.log(`Ignoring chunk ${index} for pending file: ${transferKey}`);
+      } else if (!progressData) {
+        // No progress data at all - this might be a timing issue
+        console.warn(`No progress data found for transfer: ${transferKey}. This might be a timing issue.`);
+        // Check if we have transfer data but no progress - this suggests the file was accepted but state hasn't updated
+        if (transferData) {
+          console.log(`Transfer data exists but progress is missing. Attempting to process chunk anyway.`);
+          // Process the chunk anyway since transfer data exists
+          try {
+            const byteString = atob(chunk);
+            const byteArray = new Uint8Array(byteString.length);
+            for (let i = 0; i < byteString.length; i++) byteArray[i] = byteString.charCodeAt(i);
+
+            transferData.chunks.push(byteArray);
+            transferData.receivedBytes += byteArray.length;
+
+            const progress = transferData.totalSize > 0 ? Math.round((transferData.receivedBytes / transferData.totalSize) * 100) : 0;
+            
+            // Try to update progress if possible
+            setReceiveProgress(prev => {
+              if (prev[transferKey]) {
+                return { ...prev, [transferKey]: { ...prev[transferKey], progress, status: 'receiving' } };
+              }
+              return prev;
+            });
+
+            if (isLast && transferData.receivedBytes === transferData.totalSize) {
+              console.log(`All chunks received (despite missing progress) for ${transferData.name}`);
+              const senderName = peerConnectionsRef.current[peerId]?.name ?? peerId;
+              const blob = new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' });
+              
+              // Handle large vs small files
+              const isLargeFile = transferData.totalSize > 100 * 1024 * 1024;
+              if (isLargeFile) {
+                const downloadUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = transferData.name;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => {
+                  URL.revokeObjectURL(downloadUrl);
+                  delete fileChunksRef.current[transferKey];
+                }, 100);
+                addChatMessage(`Downloaded large file: ${transferData.name} (${formatFileSize(transferData.totalSize)})`, 'system');
+              } else {
+                const newFile: ReceivedFile = { 
+                  id: generateLocalId(), 
+                  name: transferData.name, 
+                  size: transferData.totalSize, 
+                  blob: blob,
+                  from: peerId, 
+                  fromName: senderName, 
+                  timestamp: Date.now() 
+                };
+                setReceivedFiles(prev => [...prev, newFile]);
+                delete fileChunksRef.current[transferKey];
+                addChatMessage(`Received file: ${transferData.name}`, 'system');
+              }
+              
+              setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], progress: 100, status: 'complete' } }));
+            }
+          } catch (error) {
+            console.error(`Error processing chunk without progress data:`, error);
+          }
+        }
       } else {
-        console.warn(`Received chunk for unknown/completed transfer: ${transferKey}. Index: ${index}`);
+        console.warn(`Received chunk for unknown/completed transfer: ${transferKey}. Index: ${index}, Status: ${progressData?.status}`);
       }
     } else if (type === 'chunk-ack') {
       // Handle chunk acknowledgment - currently just log, could be used for retry logic
@@ -1342,8 +1414,8 @@ if (!isNameSet && !forceConnect) {
     fileChunksRef.current[transferKey] = { 
       chunks: [], 
       receivedBytes: 0, 
-      totalSize: progressData.fileSize, 
-      name: progressData.fileName, 
+      totalSize: progressData.fileSize || 0, 
+      name: progressData.fileName || 'unknown', 
       fileId: progressData.fileId, 
       fileType: progressData.fileType 
     };
@@ -1355,6 +1427,8 @@ if (!isNameSet && !forceConnect) {
         [transferKey]: { ...prev[transferKey], status: 'receiving' as const } 
       };
       console.log(`Updated receive progress for ${transferKey} to 'receiving'`);
+      // Also update the ref immediately
+      receiveProgressRef.current = updated;
       return updated;
     });
     
@@ -1367,29 +1441,30 @@ if (!isNameSet && !forceConnect) {
       return;
     }
     
-    // Add a delay to ensure state updates are processed
-    setTimeout(() => {
-      // Double-check that everything is ready
-      const currentProgress = receiveProgress[transferKey];
-      const currentTransferData = fileChunksRef.current[transferKey];
-      console.log(`Before sending acceptance - Progress status: ${currentProgress?.status}, Transfer data exists: ${!!currentTransferData}`);
-      
-      const acceptMessage = JSON.stringify({ 
-        type: 'file-accepted', 
-        fileId: progressData.fileId, 
-        fileName: progressData.fileName 
-      });
-      
-      const senderConn = peerConnectionsRef.current[senderId];
-      if (senderConn?.peer && senderConn.status === 'connected') {
-        try {
-          senderConn.peer.send(acceptMessage);
-          console.log(`Sent acceptance for file ${progressData.fileName} to ${senderId}`);
-        } catch (error) {
-          console.error(`Failed to send file acceptance to ${senderId}:`, error);
-        }
+    // Send acceptance immediately - no delay needed since we update the ref
+    const acceptMessage = JSON.stringify({ 
+      type: 'file-accepted', 
+      fileId: progressData.fileId, 
+      fileName: progressData.fileName 
+    });
+    
+    const senderConn = peerConnectionsRef.current[senderId];
+    if (senderConn?.peer && senderConn.status === 'connected') {
+      try {
+        senderConn.peer.send(acceptMessage);
+        console.log(`Sent acceptance for file ${progressData.fileName} to ${senderId}`);
+      } catch (error) {
+        console.error(`Failed to send file acceptance to ${senderId}:`, error);
+        // Revert status on error
+        setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        delete fileChunksRef.current[transferKey];
       }
-    }, 200); // Increased to 200ms to ensure state is updated
+    } else {
+      console.error(`Peer ${senderId} not connected for file acceptance`);
+      // Revert status if peer not connected
+      setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+      delete fileChunksRef.current[transferKey];
+    }
     
     addChatMessage(`Accepting file: ${progressData.fileName}`, 'system');
   }, [receiveProgress, addChatMessage]);
