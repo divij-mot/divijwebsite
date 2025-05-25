@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 256 * 1024; // 256KB chunks for better performance while maintaining stability
+const FILE_CHUNK_SIZE = 16 * 1024; // Reduced to 16KB chunks to prevent data channel overflow
 
 // Types
 interface PeerConnection {
@@ -132,8 +132,12 @@ const Share: React.FC = () => {
    // Stable disconnect handler
    const handlePeerDisconnect = useCallback((peerId: string) => {
     console.log(`Handling disconnect for peer ${peerId}`);
-    const peerToDestroy = peerConnectionsRef.current[peerId]?.peer;
+    
+    // Get the peer before updating state
+    const peerConnection = peerConnectionsRef.current[peerId];
+    const peerToDestroy = peerConnection?.peer;
 
+    // Update state first
     setPeerConnections(prev => {
       if (!prev[peerId]) return prev;
       const updated = { ...prev };
@@ -141,12 +145,17 @@ const Share: React.FC = () => {
       return updated;
     });
 
+    // Then destroy the peer if it exists
     if (peerToDestroy) {
         console.log(`Destroying peer object for ${peerId}`);
-        try { peerToDestroy.destroy(); }
-        catch (error) { console.warn(`Error destroying peer ${peerId}:`, error); }
+        try { 
+            peerToDestroy.destroy(); 
+        } catch (error) { 
+            console.warn(`Error destroying peer ${peerId}:`, error); 
+        }
     }
 
+    // Clean up progress states
     const cleanProgress = (progressSetter: React.Dispatch<React.SetStateAction<FileTransferProgress>>, prefix: boolean) => {
         progressSetter(prev => {
             const next = {...prev};
@@ -160,6 +169,7 @@ const Share: React.FC = () => {
     cleanProgress(setSendProgress, false);
     cleanProgress(setReceiveProgress, true);
 
+    // Clean up file chunks
     Object.keys(fileChunksRef.current).forEach(key => {
         if (key.startsWith(`${peerId}_`)) delete fileChunksRef.current[key];
     });
@@ -286,11 +296,12 @@ const Share: React.FC = () => {
 
     peer.on('close', () => {
       console.log(`Peer ${peerId} connection closed.`);
+      // Only handle disconnect if peer still exists in our connections
       if (peerConnectionsRef.current[peerId]) {
-          addChatMessage(`Connection closed with ${peerId}.`, 'system');
+          addChatMessage(`Connection closed with ${peerConnectionsRef.current[peerId]?.name || peerId}.`, 'system');
           handlePeerDisconnect(peerId);
       }
-       setIsConnectingPeer(currentPeer => currentPeer === peerId ? null : currentPeer);
+      setIsConnectingPeer(currentPeer => currentPeer === peerId ? null : currentPeer);
     });
       // --- MOVED PEER EVENT HANDLERS BACK INSIDE useCallback ---
       // REMOVED DUPLICATE peer.on('signal') handler block (lines 274-279) as it was added erroneously before.
@@ -1061,18 +1072,29 @@ if (!isNameSet && !forceConnect) {
     const { file, fileName, fileSize, totalChunks } = fileData;
     const transferKey = `${fileId}_${peerId}`;
     
+    // Wait a bit to ensure data channel is ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check if peer is still connected
+    const peerConn = peerConnectionsRef.current[peerId];
+    if (!peerConn || peerConn.status !== 'connected') {
+      console.error(`Peer ${peerId} not connected for file transfer`);
+      setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+      return;
+    }
+    
     // Update status to 'sending'
     setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'sending' } }));
     
     console.log(`Starting to send ${fileName} to ${peerId}. Total chunks: ${totalChunks}`);
     
-    // Send chunks
+    // Send chunks with proper error handling
     for (let i = 0; i < totalChunks; i++) {
       const start = i * FILE_CHUNK_SIZE;
       const end = Math.min(start + FILE_CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
       
-      // Check if peer is still connected
+      // Check if peer is still connected before each chunk
       if (peerConnectionsRef.current[peerId]?.status !== 'connected') {
         console.error(`Peer ${peerId} disconnected during file transfer`);
         setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
@@ -1099,19 +1121,12 @@ if (!isNameSet && !forceConnect) {
       
       if (!chunkBuffer) return;
       
-      // Convert to base64
+      // Convert to base64 - use smaller encoding chunks to prevent issues
       let base64Chunk;
       try {
         const uint8Array = new Uint8Array(chunkBuffer);
-        let binaryString = '';
-        const chunkSize = 16384; // 16KB sub-chunks for encoding
-        
-        for (let j = 0; j < uint8Array.length; j += chunkSize) {
-          const end = Math.min(j + chunkSize, uint8Array.length);
-          const slice = uint8Array.subarray(j, end);
-          binaryString += Array.from(slice).map(byte => String.fromCharCode(byte)).join('');
-        }
-        
+        // Direct conversion for small chunks
+        const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
         base64Chunk = btoa(binaryString);
       } catch (error) {
         console.error(`Error encoding chunk ${i}:`, error);
@@ -1119,16 +1134,24 @@ if (!isNameSet && !forceConnect) {
         return;
       }
       
-      // Buffer management with higher threshold for better performance
-      const peerConn = peerConnectionsRef.current[peerId];
-      const dataChannel = (peerConn.peer as any)._channel;
-      if (dataChannel) {
+      // Get fresh peer connection reference
+      const currentPeerConn = peerConnectionsRef.current[peerId];
+      if (!currentPeerConn || currentPeerConn.status !== 'connected') {
+        console.error(`Peer ${peerId} disconnected`);
+        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        return;
+      }
+      
+      // Buffer management - use lower threshold for stability
+      const dataChannel = (currentPeerConn.peer as any)._channel;
+      if (dataChannel && dataChannel.readyState === 'open') {
+        // Wait for buffer to clear if needed
         let retryCount = 0;
-        const maxRetries = 100;
-        const bufferThreshold = 8 * 1024 * 1024; // 8MB threshold for better throughput
+        const maxRetries = 200; // 10 seconds max wait
+        const bufferThreshold = 256 * 1024; // 256KB threshold
         
         while (dataChannel.bufferedAmount > bufferThreshold && retryCount < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // 50ms wait
+          await new Promise(resolve => setTimeout(resolve, 50));
           retryCount++;
           
           if (peerConnectionsRef.current[peerId]?.status !== 'connected') {
@@ -1136,14 +1159,20 @@ if (!isNameSet && !forceConnect) {
             setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
             return;
           }
-          
-          if (retryCount % 20 === 0) {
-            console.log(`[Chunk ${i}] Buffer: ${formatFileSize(dataChannel.bufferedAmount)}`);
-          }
         }
+        
+        if (retryCount >= maxRetries) {
+          console.error(`Buffer timeout for peer ${peerId}`);
+          setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+          return;
+        }
+      } else {
+        console.error(`Data channel not ready for peer ${peerId}`);
+        setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
+        return;
       }
       
-      // Send chunk
+      // Send chunk with error handling
       const chunkMessage = JSON.stringify({
         type: 'file-chunk',
         fileId,
@@ -1153,7 +1182,7 @@ if (!isNameSet && !forceConnect) {
       });
       
       try {
-        peerConn.peer.send(chunkMessage);
+        currentPeerConn.peer.send(chunkMessage);
         
         // Update progress
         const progress = Math.round(((i + 1) / totalChunks) * 100);
@@ -1164,6 +1193,11 @@ if (!isNameSet && !forceConnect) {
           }
           return prev;
         });
+        
+        // Small delay between chunks to prevent overwhelming the channel
+        if (i < totalChunks - 1) {
+          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay between chunks
+        }
         
         if (i === totalChunks - 1) {
           console.log(`All chunks sent for ${fileName} to ${peerId}`);
