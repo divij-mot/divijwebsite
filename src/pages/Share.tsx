@@ -768,14 +768,16 @@ if (!isNameSet && !forceConnect) {
       const { fileId, name, size, fileType } = message;
       console.log(`Receiving file info from ${peerId}: ${name} (${formatFileSize(size)})`);
       const transferKey = `${peerId}_${fileId}`;
-      fileChunksRef.current[transferKey] = { chunks: [], receivedBytes: 0, totalSize: size, name, fileId, fileType };
-      setReceiveProgress(prev => ({ ...prev, [transferKey]: { progress: 0, status: 'receiving', fileName: name, fileSize: size } }));
+      // Don't create the file chunks yet - wait for acceptance
+      setReceiveProgress(prev => ({ ...prev, [transferKey]: { progress: 0, status: 'pending', fileName: name, fileSize: size, peerId, fileId, fileType } }));
     } else if (type === 'file-chunk') {
       const { fileId, chunk, index, isLast } = message;
       const transferKey = `${peerId}_${fileId}`;
       const transferData = fileChunksRef.current[transferKey];
+      const progressData = receiveProgress[transferKey];
 
-      if (transferData) {
+      // Only accept chunks if file was accepted
+      if (transferData && progressData?.status === 'receiving') {
         try {
             const byteString = atob(chunk);
             const byteArray = new Uint8Array(byteString.length);
@@ -806,14 +808,37 @@ if (!isNameSet && !forceConnect) {
 
             if (isLast) {
                 if (transferData.receivedBytes === transferData.totalSize) {
-                    console.log(`All chunks received for ${transferData.name} from ${peerId}. Reassembling...`);
-                    const fileBlob = new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' });
+                    console.log(`All chunks received for ${transferData.name} from ${peerId}. Preparing download...`);
+                    
+                    // Use streaming download for large files to avoid memory issues
                     const senderName = peerConnectionsRef.current[peerId]?.name ?? peerId;
-                    const newFile: ReceivedFile = { id: generateLocalId(), name: transferData.name, size: transferData.totalSize, blob: fileBlob, from: peerId, fromName: senderName, timestamp: Date.now() };
+                    const downloadUrl = URL.createObjectURL(new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' }));
+                    
+                    // Trigger download immediately and cleanup
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = transferData.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Cleanup memory immediately
+                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+                    
+                    // Add to received files list with minimal data
+                    const newFile: ReceivedFile = { 
+                        id: generateLocalId(), 
+                        name: transferData.name, 
+                        size: transferData.totalSize, 
+                        blob: new Blob(), // Empty blob to save memory
+                        from: peerId, 
+                        fromName: senderName, 
+                        timestamp: Date.now() 
+                    };
                     setReceivedFiles(prev => [...prev, newFile]);
                     setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], progress: 100, status: 'complete' } }));
                     delete fileChunksRef.current[transferKey];
-                    addChatMessage(`Received file: ${transferData.name}`, 'system');
+                    addChatMessage(`Downloaded file: ${transferData.name}`, 'system');
                 } else {
                     console.warn(`Size mismatch for ${transferData.name}: ${transferData.receivedBytes}/${transferData.totalSize}`);
                      setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
@@ -827,6 +852,9 @@ if (!isNameSet && !forceConnect) {
              if(fileChunksRef.current[transferKey]) delete fileChunksRef.current[transferKey];
              addChatMessage(`Failed to process data for file: ${transferData?.name || 'unknown'}`, 'system');
         }
+      } else if (progressData?.status === 'pending') {
+        // Ignore chunks for pending (not yet accepted) files
+        console.log(`Ignoring chunk ${index} for pending file: ${transferKey}`);
       } else {
         console.warn(`Received chunk for unknown/completed transfer: ${transferKey}. Index: ${index}`);
       }
@@ -853,9 +881,17 @@ if (!isNameSet && !forceConnect) {
   // --- Drag and Drop / Paste File Handling ---
   const processDroppedFiles = useCallback((files: FileList | null | undefined) => {
       if (files && files.length > 0) {
-          // For simplicity, handle only the first file dropped/pasted
+          // Handle the first file dropped/pasted
           const file = files[0];
-          console.log("File received via drop/paste:", file.name);
+          
+          // Check file size limit (512GB)
+          const maxFileSize = 512 * 1024 * 1024 * 1024; // 512GB in bytes
+          if (file.size > maxFileSize) {
+            setServerError("File too large. Maximum file size is 512GB.");
+            return;
+          }
+          
+          console.log("File received via drop/paste:", file.name, formatFileSize(file.size));
           setSelectedFile(file);
           setServerError(null);
           // Optionally clear the file input ref value if it was used previously
@@ -885,10 +921,25 @@ if (!isNameSet && !forceConnect) {
       setIsDragging(true); // Keep dragging state active
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
+      
+      // Handle folder support
+      if (e.dataTransfer.items) {
+          const items = Array.from(e.dataTransfer.items);
+          for (const item of items) {
+              if (item.kind === 'file') {
+                  const entry = item.webkitGetAsEntry();
+                  if (entry?.isDirectory) {
+                      setServerError("Folder upload not supported yet. Please zip the folder first.");
+                      return;
+                  }
+              }
+          }
+      }
+      
       processDroppedFiles(e.dataTransfer.files);
   }, [processDroppedFiles]);
 
@@ -906,6 +957,14 @@ if (!isNameSet && !forceConnect) {
 
   const sendFile = useCallback(async () => {
     if (!selectedFile) { setServerError("No file selected."); return; }
+    
+    // Check file size limit (512GB)
+    const maxFileSize = 512 * 1024 * 1024 * 1024; // 512GB in bytes
+    if (selectedFile.size > maxFileSize) {
+      setServerError("File too large. Maximum file size is 512GB.");
+      return;
+    }
+    
     const connectedPeers = Object.values(peerConnectionsRef.current).filter(conn => conn.status === 'connected');
     if (connectedPeers.length === 0) { setServerError("No connected peers to send the file to."); return; }
 
@@ -937,40 +996,56 @@ if (!isNameSet && !forceConnect) {
     });
     // --- END FIX ---
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      if (!e.target?.result) {
-          console.error("FileReader error: No result");
-          setServerError("Error reading the file.");
-          connectedPeers.forEach(conn => setSendProgress(prev => ({ ...prev, [`${fileId}_${conn.peerId}`]: { ...prev[`${fileId}_${conn.peerId}`], status: 'failed' } })));
-          return;
+    // Stream file reading to avoid memory issues with large files
+    const totalChunks = Math.ceil(selectedFile.size / FILE_CHUNK_SIZE);
+    console.log(`File size: ${formatFileSize(selectedFile.size)}. Total chunks: ${totalChunks}`);
+
+    // Process file in chunks without loading entire file into memory
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * FILE_CHUNK_SIZE;
+      const end = Math.min(start + FILE_CHUNK_SIZE, selectedFile.size);
+      const chunk = selectedFile.slice(start, end);
+      
+      // Read each chunk individually
+      const chunkBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) {
+            resolve(e.target.result as ArrayBuffer);
+          } else {
+            reject(new Error("Failed to read file chunk"));
+          }
+        };
+        reader.onerror = (e) => {
+          console.error("FileReader error:", e);
+          reject(new Error("FileReader error - file may be corrupted or inaccessible"));
+        };
+        reader.readAsArrayBuffer(chunk);
+      }).catch(error => {
+        console.error(`Error reading chunk ${i}:`, error);
+        setServerError(`Error reading file chunk ${i + 1}: ${error.message}`);
+        connectedPeers.forEach(conn => {
+          const transferKey = `${fileId}_${conn.peerId}`;
+          setSendProgress(prev => ({ ...prev, [transferKey]: { ...(prev[transferKey] || {}), status: 'failed', fileName, fileSize } }));
+        });
+        return null;
+      });
+
+      if (!chunkBuffer) return; // Exit if chunk reading failed
+
+      let base64Chunk;
+      try {
+          const binaryString = String.fromCharCode.apply(null, Array.from(new Uint8Array(chunkBuffer)));
+          base64Chunk = btoa(binaryString);
+      } catch (error) {
+           console.error(`Error encoding chunk ${i} to base64:`, error);
+           setServerError(`Error processing file chunk ${i+1}.`);
+           connectedPeers.forEach(conn => {
+               const transferKey = `${fileId}_${conn.peerId}`;
+               setSendProgress(prev => ({ ...prev, [transferKey]: { ...(prev[transferKey] || {}), status: 'failed', fileName, fileSize } }));
+           });
+           return;
       }
-      const buffer = e.target.result as ArrayBuffer;
-      const totalChunks = Math.ceil(buffer.byteLength / FILE_CHUNK_SIZE);
-      console.log(`File read into buffer. Total chunks: ${totalChunks}`);
-
-      // State is set before reader.readAsArrayBuffer is called.
-      // The onload handler closure will have access to fileId, fileName, fileSize.
-
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * FILE_CHUNK_SIZE;
-        const end = Math.min(start + FILE_CHUNK_SIZE, buffer.byteLength);
-        const chunkBuffer = buffer.slice(start, end);
-
-        let base64Chunk;
-        try {
-            const binaryString = String.fromCharCode.apply(null, Array.from(new Uint8Array(chunkBuffer)));
-            base64Chunk = btoa(binaryString);
-        } catch (error) {
-             console.error(`Error encoding chunk ${i} to base64:`, error);
-             setServerError(`Error processing file chunk ${i+1}.`);
-             // Use the captured state for setting failure here too
-             connectedPeers.forEach(conn => {
-                 const transferKey = `${fileId}_${conn.peerId}`;
-                 setSendProgress(prev => ({ ...prev, [transferKey]: { ...(prev[transferKey] || {}), status: 'failed', fileName, fileSize } }));
-             });
-             return;
-        }
 
         const chunkMessage = JSON.stringify({ type: 'file-chunk', fileId, chunk: base64Chunk, index: i, isLast: i === totalChunks - 1 });
 
@@ -1054,30 +1129,53 @@ if (!isNameSet && !forceConnect) {
         // Wait for all send attempts for the current chunk to resolve (or reject)
         await Promise.all(sendPromises);
       }
+    }
 
       // After loop completion
       console.log(`Finished iterating through chunks for ${fileName}`);
       addChatMessage(`Sent file: ${fileName}`, 'system');
       setSelectedFile(null); // Clear selected file state
       if (fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
-    };
-
-    // Handle FileReader errors
-    reader.onerror = (error) => {
-      console.error("FileReader error:", error);
-      setServerError("Error reading the file.");
-      // Mark all associated transfers as failed if the reader fails
-       connectedPeers.forEach(conn => {
-           const transferKey = `${fileId}_${conn.peerId}`;
-           setSendProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed', fileName, fileSize } }));
-           console.log(`[FileReader Error] Set progress status to 'failed' for ${transferKey}.`);
-       });
-    };
-
-    // Start reading the file - This triggers reader.onload or reader.onerror
-    reader.readAsArrayBuffer(selectedFile);
+    ;
   // Depends on selectedFile state and stable functions
   }, [selectedFile, addChatMessage, sendMessageToServer]);
+
+  const acceptFile = useCallback((transferKey: string) => {
+    const progressData = receiveProgress[transferKey];
+    if (!progressData || progressData.status !== 'pending') return;
+    
+    // Initialize file chunks storage
+    fileChunksRef.current[transferKey] = { 
+      chunks: [], 
+      receivedBytes: 0, 
+      totalSize: progressData.fileSize, 
+      name: progressData.fileName, 
+      fileId: progressData.fileId, 
+      fileType: progressData.fileType 
+    };
+    
+    // Update status to receiving
+    setReceiveProgress(prev => ({ 
+      ...prev, 
+      [transferKey]: { ...prev[transferKey], status: 'receiving' } 
+    }));
+    
+    addChatMessage(`Accepting file: ${progressData.fileName}`, 'system');
+  }, [receiveProgress, addChatMessage]);
+
+  const declineFile = useCallback((transferKey: string) => {
+    const progressData = receiveProgress[transferKey];
+    if (!progressData || progressData.status !== 'pending') return;
+    
+    // Remove from progress
+    setReceiveProgress(prev => {
+      const newProgress = { ...prev };
+      delete newProgress[transferKey];
+      return newProgress;
+    });
+    
+    addChatMessage(`Declined file: ${progressData.fileName}`, 'system');
+  }, [receiveProgress, addChatMessage]);
 
   const downloadFile = (fileId: string) => {
     const file = receivedFiles.find(f => f.id === fileId);
@@ -1298,8 +1396,38 @@ if (!isNameSet && !forceConnect) {
                               );
                          })}
                          {/* Receiving Progress */}
-                         {Object.entries(receiveProgress).filter(([key, p]) => p.status !== 'complete' || p.progress < 100).map(([key, { progress, status, fileName, fileSize }]) => {
+                         {Object.entries(receiveProgress).filter(([key, p]) => p.status !== 'complete' || p.progress < 100).map(([key, progressData]) => {
+                              const { progress, status, fileName, fileSize } = progressData;
                               const peerId = key.split('_')[0];
+                              
+                              if (status === 'pending') {
+                                  return (
+                                      <div key={key} className="border border-blue-300 dark:border-blue-600 rounded p-3 bg-blue-50 dark:bg-blue-900/20">
+                                          <div className="flex justify-between items-center mb-2">
+                                              <span className="font-medium truncate pr-2" title={fileName}>
+                                                  <Download className="w-3 h-3 inline mr-1" /> 
+                                                  Incoming from {peerId}: {fileName} ({formatFileSize(fileSize ?? 0)})
+                                              </span>
+                                              <span className="font-mono text-blue-600 dark:text-blue-400">Pending</span>
+                                          </div>
+                                          <div className="flex gap-2 mt-2">
+                                              <button 
+                                                  onClick={() => acceptFile(key)}
+                                                  className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs flex items-center gap-1"
+                                              >
+                                                  <Download className="w-3 h-3" /> Accept
+                                              </button>
+                                              <button 
+                                                  onClick={() => declineFile(key)}
+                                                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs flex items-center gap-1"
+                                              >
+                                                  <X className="w-3 h-3" /> Decline
+                                              </button>
+                                          </div>
+                                      </div>
+                                  );
+                              }
+                              
                               return (
                                   <div key={key}>
                                       <div className="flex justify-between items-center mb-0.5">
