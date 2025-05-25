@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 // Constants (ensure these are correct for your setup)
 const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'development' ? 'ws://localhost:8000' : `wss://${BACKEND_URL.replace('https://', '')}`; // <-- Using BACKEND_URL from env
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : BACKEND_URL; // <-- Updated to use BACKEND_URL
-const FILE_CHUNK_SIZE = 1024 * 1024; // 1MB chunks for large file performance
+const FILE_CHUNK_SIZE = 64 * 1024; // Reduced to 64KB chunks for better buffer management
 
 // Types
 interface PeerConnection {
@@ -813,35 +813,52 @@ if (!isNameSet && !forceConnect) {
                 if (transferData.receivedBytes === transferData.totalSize) {
                     console.log(`All chunks received for ${transferData.name} from ${peerId}. Preparing download...`);
                     
-                    // Use streaming download for large files to avoid memory issues
                     const senderName = peerConnectionsRef.current[peerId]?.name ?? peerId;
-                    const downloadUrl = URL.createObjectURL(new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' }));
                     
-                    // Trigger download immediately and cleanup
-                    const link = document.createElement('a');
-                    link.href = downloadUrl;
-                    link.download = transferData.name;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    // For large files (>100MB), trigger download immediately to free memory
+                    const isLargeFile = transferData.totalSize > 100 * 1024 * 1024;
                     
-                    // Cleanup memory immediately
-                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+                    if (isLargeFile) {
+                        // Create blob and download immediately for large files
+                        const blob = new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' });
+                        const downloadUrl = URL.createObjectURL(blob);
+                        
+                        // Trigger download
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        link.download = transferData.name;
+                        link.style.display = 'none';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        // Cleanup immediately for large files
+                        setTimeout(() => {
+                            URL.revokeObjectURL(downloadUrl);
+                            // Clear chunks from memory
+                            delete fileChunksRef.current[transferKey];
+                        }, 100);
+                        
+                        // Don't store in receivedFiles for large files
+                        addChatMessage(`Downloaded large file: ${transferData.name} (${formatFileSize(transferData.totalSize)})`, 'system');
+                    } else {
+                        // For smaller files, keep the original behavior
+                        const blob = new Blob(transferData.chunks, { type: transferData.fileType || 'application/octet-stream' });
+                        const newFile: ReceivedFile = { 
+                            id: generateLocalId(), 
+                            name: transferData.name, 
+                            size: transferData.totalSize, 
+                            blob: blob, // Store actual blob for small files
+                            from: peerId, 
+                            fromName: senderName, 
+                            timestamp: Date.now() 
+                        };
+                        setReceivedFiles(prev => [...prev, newFile]);
+                        delete fileChunksRef.current[transferKey];
+                        addChatMessage(`Received file: ${transferData.name}`, 'system');
+                    }
                     
-                    // Add to received files list with minimal data
-                    const newFile: ReceivedFile = { 
-                        id: generateLocalId(), 
-                        name: transferData.name, 
-                        size: transferData.totalSize, 
-                        blob: new Blob(), // Empty blob to save memory
-                        from: peerId, 
-                        fromName: senderName, 
-                        timestamp: Date.now() 
-                    };
-                    setReceivedFiles(prev => [...prev, newFile]);
                     setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], progress: 100, status: 'complete' } }));
-                    delete fileChunksRef.current[transferKey];
-                    addChatMessage(`Downloaded file: ${transferData.name}`, 'system');
                 } else {
                     console.warn(`Size mismatch for ${transferData.name}: ${transferData.receivedBytes}/${transferData.totalSize}`);
                      setReceiveProgress(prev => ({ ...prev, [transferKey]: { ...prev[transferKey], status: 'failed' } }));
@@ -865,6 +882,23 @@ if (!isNameSet && !forceConnect) {
       // Handle chunk acknowledgment - currently just log, could be used for retry logic
       const { fileId, index } = message;
       console.log(`[ACK] Chunk ${index} acknowledged by ${peerId} for file ${fileId}`);
+    } else if (type === 'file-accepted') {
+      // Handle file acceptance notification
+      const { fileId, fileName } = message;
+      const senderName = peerConnectionsRef.current[peerId]?.name || peerId;
+      addChatMessage(`${senderName} accepted file: ${fileName}`, 'system');
+    } else if (type === 'file-declined') {
+      // Handle file decline notification
+      const { fileId, fileName } = message;
+      const senderName = peerConnectionsRef.current[peerId]?.name || peerId;
+      addChatMessage(`${senderName} declined file: ${fileName}`, 'system');
+      // Clean up send progress for this file
+      const transferKey = `${fileId}_${peerId}`;
+      setSendProgress(prev => {
+        const next = { ...prev };
+        delete next[transferKey];
+        return next;
+      });
     } else {
         console.warn(`Unknown data type received from peer ${peerId}: ${type}`);
     }
@@ -1037,14 +1071,18 @@ if (!isNameSet && !forceConnect) {
 
       let base64Chunk;
       try {
-          // Convert ArrayBuffer to base64 without stack overflow for large chunks
+          // Convert ArrayBuffer to base64 more efficiently
           const uint8Array = new Uint8Array(chunkBuffer);
+          
+          // Use a more efficient base64 encoding approach
           let binaryString = '';
-          const chunkSize = 65536; // Process in 64KB sub-chunks to avoid stack overflow while staying fast
+          const chunkSize = 8192; // Smaller chunks to prevent issues
           
           for (let j = 0; j < uint8Array.length; j += chunkSize) {
-              const slice = uint8Array.slice(j, j + chunkSize);
-              binaryString += String.fromCharCode.apply(null, Array.from(slice));
+              const end = Math.min(j + chunkSize, uint8Array.length);
+              const slice = uint8Array.subarray(j, end);
+              // Use reduce for better performance
+              binaryString += Array.from(slice).map(byte => String.fromCharCode(byte)).join('');
           }
           
           base64Chunk = btoa(binaryString);
@@ -1074,17 +1112,23 @@ if (!isNameSet && !forceConnect) {
                     if (dataChannel) {
                         // Wait for buffer to be below threshold before sending
                         let retryCount = 0;
-                        const maxRetries = 50; // Max 5 seconds wait
+                        const maxRetries = 200; // Increased to 20 seconds wait
                         
-                        // RTCDataChannel buffer is typically 16MB, so we use 12MB threshold for safety
-                        while (dataChannel.bufferedAmount > 12 * 1024 * 1024 && retryCount < maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, 25)); // Wait 25ms (faster polling)
+                        // Use a much lower threshold - 256KB instead of 12MB
+                        const bufferThreshold = 256 * 1024; // 256KB threshold
+                        while (dataChannel.bufferedAmount > bufferThreshold && retryCount < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
                             retryCount++;
                             
                             // Re-check peer status during wait
                             if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
                                 console.log(`[Chunk ${i}, Peer ${conn.peerId}] Peer disconnected while waiting for buffer.`);
                                 throw new Error("Peer disconnected while waiting for buffer");
+                            }
+                            
+                            // Log buffer status periodically
+                            if (retryCount % 10 === 0) {
+                                console.log(`[Chunk ${i}, Peer ${conn.peerId}] Waiting for buffer... Current: ${formatFileSize(dataChannel.bufferedAmount)}`);
                             }
                         }
                         
@@ -1094,16 +1138,8 @@ if (!isNameSet && !forceConnect) {
                         }
                     }
 
-                    // Minimal delay for high throughput - only for very large files
-                    if (i % 20 === 0 && totalChunks > 100) { // Only delay every 20th chunk for large files
-                        await new Promise(resolve => setTimeout(resolve, 1)); // 1ms delay
-                    }
-
-                     // Re-check status in case peer disconnected while waiting
-                     if (peerConnectionsRef.current[conn.peerId]?.status !== 'connected') {
-                         console.log(`[Chunk ${i}, Peer ${conn.peerId}] Peer disconnected before sending chunk after delay.`);
-                         throw new Error("Peer disconnected before sending chunk"); // Exit sending for this peer
-                     }
+                    // No artificial delays - let buffer management handle flow control
+                    // Remove the minimal delay that was causing issues
 
                     // Attempt to send the chunk
                     conn.peer.send(chunkMessage);
@@ -1169,12 +1205,56 @@ if (!isNameSet && !forceConnect) {
       [transferKey]: { ...prev[transferKey], status: 'receiving' } 
     }));
     
+    // Send acceptance notification to sender
+    const senderId = progressData.peerId;
+    if (!senderId) {
+      console.error('No sender ID found for file acceptance');
+      return;
+    }
+    
+    const acceptMessage = JSON.stringify({ 
+      type: 'file-accepted', 
+      fileId: progressData.fileId, 
+      fileName: progressData.fileName 
+    });
+    
+    const senderConn = peerConnectionsRef.current[senderId];
+    if (senderConn?.peer && senderConn.status === 'connected') {
+      try {
+        senderConn.peer.send(acceptMessage);
+      } catch (error) {
+        console.error(`Failed to send file acceptance to ${senderId}:`, error);
+      }
+    }
+    
     addChatMessage(`Accepting file: ${progressData.fileName}`, 'system');
   }, [receiveProgress, addChatMessage]);
 
   const declineFile = useCallback((transferKey: string) => {
     const progressData = receiveProgress[transferKey];
     if (!progressData || progressData.status !== 'pending') return;
+    
+    // Send decline notification to sender
+    const senderId = progressData.peerId;
+    if (!senderId) {
+      console.error('No sender ID found for file decline');
+      return;
+    }
+    
+    const declineMessage = JSON.stringify({ 
+      type: 'file-declined', 
+      fileId: progressData.fileId, 
+      fileName: progressData.fileName 
+    });
+    
+    const senderConn = peerConnectionsRef.current[senderId];
+    if (senderConn?.peer && senderConn.status === 'connected') {
+      try {
+        senderConn.peer.send(declineMessage);
+      } catch (error) {
+        console.error(`Failed to send file decline to ${senderId}:`, error);
+      }
+    }
     
     // Remove from progress
     setReceiveProgress(prev => {
