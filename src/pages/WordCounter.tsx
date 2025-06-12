@@ -11,17 +11,14 @@ const WordCounter: React.FC = () => {
     const newText = event.target.value;
     setText(newText);
 
-    // Calculate counts
     const words = newText.trim().split(/\s+/).filter(Boolean);
     setWordCount(words.length === 1 && words[0] === '' ? 0 : words.length);
 
     setCharCount(newText.length);
 
-    // Sentences (ends with . ! ?) - simple approach
     const sentences = newText.match(/[^.!?]+[.!?]+/g) || [];
     setSentenceCount(sentences.length);
 
-    // Paragraphs (separated by newline characters) - simple approach
     const paragraphs = newText.split(/\n+/).filter(p => p.trim() !== '');
     setParagraphCount(paragraphs.length);
   };
@@ -36,7 +33,6 @@ const WordCounter: React.FC = () => {
         onChange={handleTextChange}
       />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-        {/* Darkened stat box styling */}
         <div className="p-4 border border-neutral-500 dark:border-neutral-600 rounded-md bg-neutral-100 dark:bg-neutral-800">
           <p className="text-lg font-semibold">Words</p>
           <p className="text-2xl">{wordCount}</p>

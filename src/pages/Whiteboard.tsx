@@ -1,5 +1,3 @@
-// --- START OF FILE  @/src/pages/Whiteboard.tsx ---
-/* eslint‑disable @typescript-eslint/no‑explic it‑any */
 import React, {
   useCallback,
   useEffect,
@@ -31,7 +29,6 @@ import {
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Tool =
   | 'pen'
   | 'highlighter'
@@ -67,14 +64,12 @@ interface PeerConnection {
   name?: string;
 }
 
-// ─── Whiteboard Constants ────────────────────────────────────────────────────
-const BOARD_WIDTH = 3840; // Logical width of the drawing area (Increased)
-const BOARD_HEIGHT = 2160; // Logical height (Increased)
-const MIN_ZOOM = 0.1; // Minimum zoom level
-const MAX_ZOOM = 5; // Maximum zoom level
-const PAN_MARGIN = 50; // Minimum pixels of the board to keep visible when panning
+const BOARD_WIDTH = 3840;
+const BOARD_HEIGHT = 2160;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
+const PAN_MARGIN = 50;
 
-// ─── Environment constants (shared with Share.tsx) ───────────────────────────
 const API_BASE_URL =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:8000'
@@ -83,9 +78,8 @@ const API_BASE_URL =
 const SIGNALING_SERVER_URL =
   process.env.NODE_ENV === 'development'
     ? 'ws://localhost:8000'
-    : `wss://${BACKEND_URL.replace('https://', '')}`; // Updated to use BACKEND_URL
+    : `wss://${BACKEND_URL.replace('https://', '')}`;
 
-// ─── Helper utilities ────────────────────────────────────────────────────────
 const uuid = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 
 const downloadBlob = (blob: Blob, fileName: string) => {
@@ -99,36 +93,29 @@ const downloadBlob = (blob: Blob, fileName: string) => {
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
-// ─── Component ───────────────────────────────────────────────────────────────
 const Whiteboard: React.FC = () => {
-  // ─── Canvas refs ───────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
-  // View‑transform (zoom / pan)
   const scaleRef = useRef<number>(1);
-  // Adjust initial pan to center the board roughly (can be refined)
   const panRef = useRef<Point>({ x: 50, y: 50 });
   const isPanning = useRef<boolean>(false);
 
-  // Function to clamp pan based on current scale and canvas size
   const clampPan = useCallback((newPan: Point, currentScale: number, canvas: HTMLCanvasElement | null): Point => {
       if (!canvas) return newPan;
       const { clientWidth: cw, clientHeight: ch } = canvas;
 
-      // Calculate min/max pan values to keep the board edges within PAN_MARGIN of the screen edges
       const minPanX = PAN_MARGIN - BOARD_WIDTH * currentScale;
       const maxPanX = cw - PAN_MARGIN;
       const minPanY = PAN_MARGIN - BOARD_HEIGHT * currentScale;
       const maxPanY = ch - PAN_MARGIN;
 
-      // If the board is smaller than the viewport, center it instead of clamping to edges
       const clampedX = BOARD_WIDTH * currentScale < cw - 2 * PAN_MARGIN
-          ? (cw - BOARD_WIDTH * currentScale) / 2 // Center horizontally
+          ? (cw - BOARD_WIDTH * currentScale) / 2
           : clamp(newPan.x, minPanX, maxPanX);
 
       const clampedY = BOARD_HEIGHT * currentScale < ch - 2 * PAN_MARGIN
-          ? (ch - BOARD_HEIGHT * currentScale) / 2 // Center vertically
+          ? (ch - BOARD_HEIGHT * currentScale) / 2
           : clamp(newPan.y, minPanY, maxPanY);
 
       return { x: clampedX, y: clampedY };
@@ -148,12 +135,10 @@ const Whiteboard: React.FC = () => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctxRef.current = ctx;
-    // Clamp pan after resize and redraw
     panRef.current = clampPan(panRef.current, scaleRef.current, canvasRef.current);
-    redrawAll(); // re‑paint after resize
-  }, [clampPan]); // Add clampPan dependency
+    redrawAll();
+  }, [clampPan]);
 
-  // ─── Whiteboard state ──────────────────────────────────────────────────────
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const strokesRef = useRef<Stroke[]>([]);
   useEffect(() => {
@@ -170,7 +155,6 @@ const Whiteboard: React.FC = () => {
   const [textInputPos, setTextInputPos] = useState<Point | null>(null);
   const [textValue, setTextValue] = useState<string>('');
 
-  // ─── Drawing helpers ───────────────────────────────────────────────────────
   const boardToScreen = (p: Point): Point => ({
     x: p.x * scaleRef.current + panRef.current.x,
     y: p.y * scaleRef.current + panRef.current.y
@@ -181,7 +165,6 @@ const Whiteboard: React.FC = () => {
     y: (p.y - panRef.current.y) / scaleRef.current
   });
 
-  // Helper to clamp a point to the board boundaries
   const clampToBoard = (p: Point): Point => ({
       x: clamp(p.x, 0, BOARD_WIDTH),
       y: clamp(p.y, 0, BOARD_HEIGHT)
@@ -200,19 +183,16 @@ const Whiteboard: React.FC = () => {
       context.globalAlpha = 0.25;
     }
     if (s.tool === 'eraser') {
-      context.strokeStyle = '#FFFFFF'; // Use white color for eraser
-      context.fillStyle = '#FFFFFF';   // Also set fill to white
-      context.globalCompositeOperation = 'source-over'; // Use normal drawing mode
-      context.lineWidth = s.width; // Use selected width for eraser
+      context.strokeStyle = '#FFFFFF';
+      context.fillStyle = '#FFFFFF';
+      context.globalCompositeOperation = 'source-over';
+      context.lineWidth = s.width;
     } else {
       context.globalCompositeOperation = 'source-over';
-      // Set color and width for non-eraser tools
       context.strokeStyle = s.color;
       context.fillStyle = s.color;
       context.lineWidth = s.width;
     }
-
-    // Removed general color/width setting from here
 
     if (s.tool === 'rect' || s.tool === 'ellipse' || s.tool === 'line') {
       const [p1, p2] = s.points;
@@ -256,39 +236,32 @@ const Whiteboard: React.FC = () => {
   }, []);
 
   const redrawAll = useCallback(() => {
-    // Get canvas and context once
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!ctx || !canvas) return;
 
-    // Clear canvas and set white background
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-    ctx.fillStyle = '#FFFFFF'; // Set fill to white
-    ctx.fillRect(0, 0, canvas.width, canvas.height); // Fill the entire canvas
-    // ctx.clearRect(0, 0, canvas.width, canvas.height); // ClearRect is no longer needed as fillRect overwrites
-    ctx.restore(); // Restore previous transform state (like dpr scaling)
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
 
-    // Draw board boundary (visual aid)
     ctx.save();
     ctx.translate(panRef.current.x, panRef.current.y);
     ctx.scale(scaleRef.current, scaleRef.current);
-    ctx.strokeStyle = 'rgba(150, 150, 150, 0.2)'; // Light grey, semi-transparent
-    ctx.lineWidth = 1 / scaleRef.current; // Keep line width consistent regardless of zoom
+    ctx.strokeStyle = 'rgba(150, 150, 150, 0.2)';
+    ctx.lineWidth = 1 / scaleRef.current;
     ctx.strokeRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
     ctx.restore();
 
-    // Draw all strokes
     strokesRef.current.forEach(s => drawStroke(s, ctx));
-  }, [drawStroke]); // Removed clampPan dependency as it's not used here
+  }, [drawStroke]);
 
 
-  // ─── Pointer events ────────────────────────────────────────────────────────
   const drawing = useRef<Stroke | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button === 1 || (tool !== 'text' && e.shiftKey)) {
-      // middle‑click or shift+drag → pan
       isPanning.current = true;
       return;
     }
@@ -298,26 +271,21 @@ const Whiteboard: React.FC = () => {
       return;
     }
 
-    // Calculate the initial point in board coordinates
     const startBoardPos = screenToBoard({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY });
 
-    // Check if the starting point is within the defined board area
     if (startBoardPos.x < 0 || startBoardPos.x > BOARD_WIDTH || startBoardPos.y < 0 || startBoardPos.y > BOARD_HEIGHT) {
-        // If starting outside the bounds, do nothing
         drawing.current = null;
         return;
     }
 
-    // If starting point is valid, create the new stroke (no need to clamp start point now)
     const newStroke: Stroke = {
       id: uuid(),
       tool,
       color,
       width,
-      points: [startBoardPos] // Use the original, valid starting point
+      points: [startBoardPos]
     };
 
-    // Set the current drawing and add to strokes state
     drawing.current = newStroke;
     setStrokes(prev => [...prev, newStroke]);
   };
@@ -328,31 +296,26 @@ const Whiteboard: React.FC = () => {
           x: panRef.current.x + e.movementX,
           y: panRef.current.y + e.movementY
       };
-      // Clamp the new pan position
       panRef.current = clampPan(newPan, scaleRef.current, canvasRef.current);
       redrawAll();
       return;
     }
 
     if (!drawing.current) return;
-    // Clamp the current point to the board
     const boardPos = clampToBoard(screenToBoard({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }));
 
-    // Check if the new point is different from the last one to avoid unnecessary updates/duplicates
     const lastPoint = drawing.current.points[drawing.current.points.length - 1];
     if (lastPoint && lastPoint.x === boardPos.x && lastPoint.y === boardPos.y) {
-        return; // Don't add identical points
+        return;
     }
 
     if (['rect', 'ellipse', 'line'].includes(tool)) {
-      // Update second point (always keep 2 points for shapes/lines)
       drawing.current.points[1] = boardPos;
     } else {
-      // Add the clamped point for freehand tools
       drawing.current.points.push(boardPos);
     }
     redrawAll();
-    drawStroke(drawing.current); // Draw the updated stroke preview
+    drawStroke(drawing.current);
   };
 
   const finishStroke = () => {
@@ -366,13 +329,8 @@ const Whiteboard: React.FC = () => {
     drawing.current = null;
   };
 
-  // ─── Mouse wheel zoom ──────────────────────────────────────────────────────
   const handleWheel = (e: React.WheelEvent) => {
-    // Always prevent default browser scroll/zoom behavior when wheel is used over canvas
-    e.preventDefault(); // Prevent default page scroll/zoom when scrolling on canvas
-
-    // Remove the Ctrl key check to allow canvas zoom without it
-    // if (!e.ctrlKey) return;
+    e.preventDefault();
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -383,29 +341,25 @@ const Whiteboard: React.FC = () => {
 
     const zoomAroundBoard = screenToBoard({ x: mouseX, y: mouseY });
 
-    const factor = e.deltaY < 0 ? 1.1 : 0.9; // Zoom factor
-    const newScale = clamp(scaleRef.current * factor, MIN_ZOOM, MAX_ZOOM); // Use defined min/max zoom
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    const newScale = clamp(scaleRef.current * factor, MIN_ZOOM, MAX_ZOOM);
 
-    // Calculate the new pan position to keep the zoom centered on the mouse pointer
     const newPanX = mouseX - zoomAroundBoard.x * newScale;
     const newPanY = mouseY - zoomAroundBoard.y * newScale;
 
-    // Update scale and pan, clamping the pan
     scaleRef.current = newScale;
     panRef.current = clampPan({ x: newPanX, y: newPanY }, newScale, canvas);
 
     redrawAll();
   };
 
-  // ─── Text tool helper ──────────────────────────────────────────────────────
   const confirmText = () => {
     if (!textInputPos || !textValue.trim()) {
       setTextInputPos(null);
-      setTextInputPos(null); // Clear position if text is empty
+      setTextInputPos(null);
       setTextValue('');
       return;
     }
-    // Clamp the text position before creating the stroke
     const clampedPos = clampToBoard(textInputPos);
 
     const s: Stroke = {
@@ -413,7 +367,7 @@ const Whiteboard: React.FC = () => {
       tool: 'text',
       color,
       width,
-      points: [clampedPos], // Use clamped position
+      points: [clampedPos],
       text: textValue.trim()
     };
     setStrokes(prev => [...prev, s]);
@@ -423,7 +377,6 @@ const Whiteboard: React.FC = () => {
     setTextValue('');
   };
 
-  // ─── Undo / redo ───────────────────────────────────────────────────────────
   const undo = () => {
     if (!undoStack.length) return;
     setRedoStack(prev => [...prev, strokesRef.current]);
@@ -438,10 +391,8 @@ const Whiteboard: React.FC = () => {
     setRedoStack(stack => stack.slice(0, -1));
   };
 
-  // Keep canvas updated when strokes change
   useEffect(redrawAll, [strokes, redrawAll]);
 
-  // ─── Export / import helpers ───────────────────────────────────────────────
   const exportPNG = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -471,7 +422,6 @@ const Whiteboard: React.FC = () => {
     });
   };
 
-  // ─── Collaborative logic ───────────────────────────────────────────────────
   const userIdRef = useRef<string>('');
   const [userName, setUserName] = useState<string>('');
   const userNameRef = useRef<string>('');
@@ -493,12 +443,10 @@ const Whiteboard: React.FC = () => {
   const socketRef = useRef<WebSocket | null>(null);
   const sendQueue = useRef<any[]>([]);
 
-  // ─── Minimal signalling (same protocol as Share.tsx) ───────────────────────
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      // 1. unique ID
       const res = await fetch(`${API_BASE_URL}/generate-id`);
       const { id: myId } = (await res.json()) as { id: string };
       if (!isMounted) return;
@@ -507,7 +455,6 @@ const Whiteboard: React.FC = () => {
       const baseUrl = `${window.location.origin}${window.location.pathname}`;
       setShareLink(`${baseUrl}?peer=${myId}`);
 
-      // 2. open websocket
       const ws = new WebSocket(`${SIGNALING_SERVER_URL}/ws/${myId}`);
       socketRef.current = ws;
 
@@ -515,7 +462,6 @@ const Whiteboard: React.FC = () => {
         sendQueue.current.forEach(p => ws.send(JSON.stringify(p)));
         sendQueue.current.length = 0;
 
-        // auto‑connect if ?peer=…
         const peerParam = new URLSearchParams(location.search).get('peer');
         if (peerParam) requestPeerConnection(peerParam);
       };
@@ -534,11 +480,9 @@ const Whiteboard: React.FC = () => {
       isMounted = false;
       window.removeEventListener('resize', resizeCanvas);
       socketRef.current?.close();
-      // Object.values(peerConnectionsRef.current).forEach(p => p.peer?.destroy()); // Commented out: Let browser handle peer cleanup on socket close/unmount? See if this prevents premature disconnects.
     };
   }, [resizeCanvas]);
 
-  // ─── Signalling helpers ────────────────────────────────────────────────────
   const sendToServer = (payload: any) => {
     const ws = socketRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -573,24 +517,21 @@ const Whiteboard: React.FC = () => {
     const peer = new Peer({
       initiator,
       trickle: true,
-      config: { // Add STUN server configuration
+      config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          // You could add more STUN servers or TURN servers here if needed
         ]
       }
     });
 
-    peer.on('signal', (data: any) => { // Add type 'any' for signal data
-        // Determine message type based on signal data
+    peer.on('signal', (data: any) => {
         const messageType = data.type === 'offer' ? 'offer' : data.type === 'answer' ? 'answer' : 'ice-candidate';
         const payloadKey = messageType === 'ice-candidate' ? 'candidate' : messageType;
 
-        // Ensure the target field is always included
         sendToServer({
             type: messageType,
-            target: peerId, // Explicitly set the target peer ID
+            target: peerId,
             [payloadKey]: data
         });
     });
@@ -601,17 +542,14 @@ const Whiteboard: React.FC = () => {
         ...prev,
         [peerId]: { ...prev[peerId], status: 'connected', peer }
       }));
-      // Send full state to the new peer
       peer.send(JSON.stringify({ type: 'full-state', strokes: strokesRef.current }));
 
-      // Send list of other connected peers to the new peer
       const otherPeerIds = Object.keys(peerConnectionsRef.current).filter(
           id => id !== peerId && peerConnectionsRef.current[id]?.status === 'connected'
       );
       if (otherPeerIds.length > 0) {
           peer.send(JSON.stringify({ type: 'peer-list', peers: otherPeerIds }));
       }
-      // Send peer list and user info (only if initiator of this P2P link)
       if (initiator) {
           const otherPeerIds = Object.keys(peerConnectionsRef.current).filter(
               id => id !== peerId && peerConnectionsRef.current[id]?.status === 'connected'
@@ -619,7 +557,6 @@ const Whiteboard: React.FC = () => {
           if (otherPeerIds.length > 0) {
               peer.send(JSON.stringify({ type: 'peer-list', peers: otherPeerIds }));
           }
-          // Also send own user info (if name is set)
           if (userNameRef.current) {
               peer.send(JSON.stringify({ type: 'user-info', name: userNameRef.current, userId: userIdRef.current }));
           }
@@ -658,20 +595,17 @@ const Whiteboard: React.FC = () => {
     const { type, peerId, source, offer, answer, candidate } = msg;
     switch (type) {
       case 'connection-request': {
-        // Auto-accept: Send success back immediately and prepare for offer
         console.log(`Received connection request from ${msg.name || peerId}, auto-accepting.`);
         sendToServer({ type: 'connection-success', target: peerId });
-        // Set peer state to connecting, ready to receive offer
         setPeerConnections(prev => ({
           ...prev,
           [peerId]: {
             peerId,
             peer: null,
-            status: 'connecting', // Directly to connecting
+            status: 'connecting',
             name: msg.name
           }
         }));
-        // No need to createPeer here, wait for the 'offer' signal
         break;
       }
 
@@ -730,7 +664,6 @@ const Whiteboard: React.FC = () => {
     }
   };
 
-  // ─── P2P data handling ─────────────────────────────────────────────────────
   const broadcast = (payload: any) => {
     Object.values(peerConnectionsRef.current).forEach(pc => {
       if (pc.status === 'connected' && pc.peer?.connected) {
@@ -743,12 +676,9 @@ const Whiteboard: React.FC = () => {
     });
   };
 
-  const handlePeerData = (msg: any, sourcePeerId: string) => { // Renamed peerId to sourcePeerId for clarity
-    // console.log(`Received data from ${sourcePeerId}:`, msg.type); // Optional: log received data type and source
+  const handlePeerData = (msg: any, sourcePeerId: string) => {
     switch (msg.type) {
       case 'stroke':
-        // Avoid adding duplicate strokes if received from multiple peers?
-        // Basic check: don't add if stroke ID already exists
         if (!strokesRef.current.some(s => s.id === msg.stroke?.id)) {
             setStrokes(prev => [...prev, msg.stroke]);
         }
@@ -757,8 +687,6 @@ const Whiteboard: React.FC = () => {
         setStrokes([]);
         break;
       case 'full-state':
-        // Only accept full state if the current board is empty
-        // This prevents overwriting the host's drawing when a new peer joins
         if (strokesRef.current.length === 0) {
             console.log(`Received full state from ${sourcePeerId} and applying (board was empty).`);
             setStrokes(msg.strokes || []);
@@ -766,7 +694,7 @@ const Whiteboard: React.FC = () => {
             console.log(`Received full state from ${sourcePeerId} but ignored (board not empty).`);
         }
         break;
-      case 'peer-list': // Handle receiving list of peers
+      case 'peer-list':
         console.log(`Received peer list from ${sourcePeerId}:`, msg.peers);
         msg.peers?.forEach((idToConnect: string) => {
           if (idToConnect !== userIdRef.current && !peerConnectionsRef.current[idToConnect]) {
@@ -775,10 +703,9 @@ const Whiteboard: React.FC = () => {
           }
         });
         break;
-      case 'user-info': // Handle receiving user info
+      case 'user-info':
          console.log(`Received user info from ${sourcePeerId}:`, msg.name);
          setPeerConnections(prev => prev[sourcePeerId] ? { ...prev, [sourcePeerId]: { ...prev[sourcePeerId], name: msg.name } } : prev);
-         // No need to update incoming requests anymore
          break;
       default:
         console.warn(`Unknown peer data type from ${sourcePeerId}: ${msg.type}`);
@@ -786,14 +713,12 @@ const Whiteboard: React.FC = () => {
     }
   };
 
-  // ─── Clear board ───────────────────────────────────────────────────────────
   const clearBoard = () => {
     if (!confirm('Clear entire board?')) return;
     setStrokes([]);
     broadcast({ type: 'clear' });
   };
 
-  // ─── JSX helpers ───────────────────────────────────────────────────────────
   const ToolButton = ({
     active,
     onClick,
@@ -829,33 +754,25 @@ const Whiteboard: React.FC = () => {
       .catch(console.error);
   };
 
-  // Add useEffect for manual wheel listener attachment to prevent passive listener warning
   useEffect(() => {
     const canvas = canvasRef.current;
-    // The handleWheel function needs to be stable or included in dependencies
-    // Need to cast WheelEvent to React.WheelEvent for the handler function type
     const wheelHandler = (e: WheelEvent) => handleWheel(e as unknown as React.WheelEvent<HTMLCanvasElement>);
 
     if (canvas) {
-        // Attach the wheel listener with passive: false
         canvas.addEventListener('wheel', wheelHandler, { passive: false });
-        console.log("Attached non-passive wheel listener"); // Debug log
+        console.log("Attached non-passive wheel listener");
 
-        // Cleanup function to remove the listener
         return () => {
             canvas.removeEventListener('wheel', wheelHandler);
-            console.log("Removed wheel listener"); // Debug log
+            console.log("Removed wheel listener");
         };
     }
-  }, [handleWheel]); // Re-run if handleWheel function identity changes
+  }, [handleWheel]);
 
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
-      {/* Top toolbar */}
       <div className="flex flex-wrap gap-2 p-2 border-b border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
-        {/* Tools */}
         <ToolButton active={tool === 'pen'} onClick={() => setTool('pen')} title="Pen">
           <Pencil size={18} />
         </ToolButton>
@@ -882,10 +799,8 @@ const Whiteboard: React.FC = () => {
           <Type size={18} />
         </ToolButton>
 
-        {/* Divider */}
         <span className="w-px h-6 bg-neutral-400 mx-1" />
 
-        {/* Colour & size */}
         <input
           type="color"
           value={color}
@@ -897,19 +812,17 @@ const Whiteboard: React.FC = () => {
           <input
             type="range"
             min={1}
-            max={100} // Increased max value to 100
+            max={100}
             value={width}
             onChange={e => setWidth(+e.target.value)}
             title="Stroke width"
-            className="w-24" // Added width for better layout
+            className="w-24"
           />
-          <span className="text-sm w-10 text-right">{width}px</span> {/* Added pixel display */}
+          <span className="text-sm w-10 text-right">{width}px</span>
         </div>
 
-        {/* Divider */}
         <span className="w-px h-6 bg-neutral-400 mx-1" />
 
-        {/* Undo / redo / clear */}
         <ToolButton active={false} onClick={undo} title="Undo">
           <RotateCcw size={18} />
         </ToolButton>
@@ -920,10 +833,8 @@ const Whiteboard: React.FC = () => {
           <Trash2 size={18} />
         </ToolButton>
 
-        {/* Divider */}
         <span className="w-px h-6 bg-neutral-400 mx-1" />
 
-        {/* Import / export */}
         <ToolButton active={false} onClick={exportPNG} title="Download PNG">
           <Download size={18} />
         </ToolButton>
@@ -940,10 +851,8 @@ const Whiteboard: React.FC = () => {
           />
         </label>
 
-        {/* Divider */}
         <span className="w-px h-6 bg-neutral-400 mx-1" />
 
-        {/* Collaboration UI */}
         <div className="flex items-center gap-1">
           <Users size={18} />
           <span className="text-sm">
@@ -951,7 +860,6 @@ const Whiteboard: React.FC = () => {
           </span>
         </div>
 
-        {/* Share link (copy) */}
         <div className="flex items-center gap-1 ml-4">
           <button
             onClick={copyLink}
@@ -964,7 +872,6 @@ const Whiteboard: React.FC = () => {
 
       </div>
 
-      {/* Canvas */}
       <div className="flex-1 relative overflow-hidden">
         <canvas
           ref={canvasRef}
@@ -974,10 +881,8 @@ const Whiteboard: React.FC = () => {
           onPointerMove={handlePointerMove}
           onPointerUp={finishStroke}
           onPointerLeave={finishStroke}
-          // onWheel={handleWheel} // Remove the React prop, listener is added via useEffect
         />
 
-        {/* Text input overlay */}
         {textInputPos && (
           <textarea
             autoFocus
@@ -998,11 +903,9 @@ const Whiteboard: React.FC = () => {
           />
         )}
 
-        {/* Incoming connection requests removed */}
       </div>
     </div>
   );
 };
 
 export default Whiteboard;
-// --- END OF FILE  @/src/pages/Whiteboard.tsx ---

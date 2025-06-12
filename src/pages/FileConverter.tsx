@@ -2,66 +2,60 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import heic2any from 'heic2any';
 import * as UTIF from 'utif';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util'; // toBlobURL is not strictly needed for this implementation anymore
+import { fetchFile } from '@ffmpeg/util';
 import { CheckCircle, XCircle, Download, Loader2, FileWarning, AlertCircle, X } from 'lucide-react';
 
-// Define types more robustly
+// types 
 type SupportedImageInput = 'HEIC' | 'JPG' | 'PNG' | 'TIFF' | 'DNG';
 type SupportedVideoInput = 'MP4';
-type SupportedDocumentInput = 'DOCX'; // Keep for future reference
+type SupportedDocumentInput = 'DOCX'; //added for future 
 type SupportedInput = SupportedImageInput | SupportedVideoInput | SupportedDocumentInput;
 
-type SupportedImageOutput = 'JPG' | 'PNG' | 'TIFF'; // Added TIFF output
+type SupportedImageOutput = 'JPG' | 'PNG' | 'TIFF';
 type SupportedVideoOutput = 'MOV';
 type SupportedAudioOutput = 'MP3' | 'WAV';
-type SupportedDocumentOutput = 'PDF'; // Keep for future reference
+type SupportedDocumentOutput = 'PDF'; //added for future
 type PossibleOutputFormat = SupportedImageOutput | SupportedVideoOutput | SupportedAudioOutput | SupportedDocumentOutput;
 
-// Interface for tracking individual file status
 interface FileStatus {
   file: File;
-  id: string; // Unique ID for React key
+  id: string; 
   inputFormat: SupportedInput | null;
   status: 'pending' | 'converting' | 'done' | 'error';
-  outputFormat?: PossibleOutputFormat; // Track the format it was converted to
-  resultUrl?: string; // URL for the converted file blob
-  error?: string; // Error message if conversion failed
-  outputFilename?: string; // Store the generated output filename
+  outputFormat?: PossibleOutputFormat;
+  resultUrl?: string;
+  error?: string;
+  outputFilename?: string;
 }
 
-// Helper function (defined outside the component)
+// formats file size
 const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]; // Use 1 decimal place
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
 
 const FileConverter: React.FC = () => {
-  // --- State Hooks ---
   const [filesToProcess, setFilesToProcess] = useState<FileStatus[]>([]);
   const [selectedOutputFormat, setSelectedOutputFormat] = useState<PossibleOutputFormat | ''>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [overallError, setOverallError] = useState<string | null>(null);
   const [showFormatWarning, setShowFormatWarning] = useState(false);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
-  const [isDragging, setIsDragging] = useState<boolean>(false); // State for drag overlay
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // --- Ref Hooks ---
+
   const ffmpegRef = useRef(new FFmpeg());
-  const ffmpegLoadingStarted = useRef(false); // Track loading initiation
-  const filesToProcessRef = useRef(filesToProcess); // Ref to access latest state in cleanup
+  const ffmpegLoadingStarted = useRef(false);
+  const filesToProcessRef = useRef(filesToProcess);
 
-  // --- Effect to keep filesToProcessRef updated ---
-  // This runs whenever filesToProcess changes, ensuring the cleanup effect
-  // always has access to the latest list via the ref.
   useEffect(() => {
     filesToProcessRef.current = filesToProcess;
   }, [filesToProcess]);
 
-  // --- Effect to Load FFmpeg (ESM version) ---
   useEffect(() => {
     const loadFFmpeg = async () => {
       const ffmpeg = ffmpegRef.current;
@@ -72,7 +66,7 @@ const FileConverter: React.FC = () => {
       const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
 
       ffmpeg.on('log', ({ message }) => {
-        // console.log('[FFmpeg log]', message); // Uncomment for debugging FFmpeg
+        // console.log('[FFmpeg log]', message); // debug thingy
       });
 
       if (ffmpegLoadingStarted.current || ffmpeg.loaded) {
@@ -108,15 +102,12 @@ const FileConverter: React.FC = () => {
 
     loadFFmpeg();
 
-  }, []); // Empty dependency array: runs once on mount
+  }, []); 
 
-  // --- Effect for Blob URL Cleanup on Unmount ---
+  // url cleanup on unmount
   useEffect(() => {
-    // This setup runs once on mount.
-    // The returned cleanup function runs ONLY when the component unmounts.
     return () => {
         console.log("Component unmounting, revoking Blob URLs...");
-        // Access the latest file list via the ref's .current property
         const currentFiles = filesToProcessRef.current;
         currentFiles.forEach(fs => {
             if (fs.resultUrl) {
@@ -124,21 +115,15 @@ const FileConverter: React.FC = () => {
                 console.log(`Revoked blob URL on unmount: ${fs.file.name} (${fs.resultUrl})`);
             }
         });
-        // Optional: Terminate ffmpeg worker on unmount if needed for stricter cleanup
-        // if (ffmpegRef.current.loaded) {
-        //    try { ffmpegRef.current.terminate(); console.log("FFmpeg terminated on unmount."); }
-        //    catch (e) { console.warn("FFmpeg terminate failed on unmount", e); }
-        // }
+
     };
-  }, []); // Empty dependency array: cleanup runs only on unmount
+  }, []); 
 
-  // --- Event Handlers & Logic ---
-
-  // Combined file processing logic for select, drop, and paste
+  // file processing for select, drop, and paste
   const processInputFiles = useCallback((files: FileList | null | undefined) => {
     if (!files || files.length === 0) return;
 
-    const newFiles: FileStatus[] = Array.from(files).map((file: File) => { // Explicitly type 'file' here
+    const newFiles: FileStatus[] = Array.from(files).map((file: File) => { 
       const extension = file.name.split('.').pop()?.toUpperCase();
       let inputFormat: SupportedInput | null = null;
       if (extension === 'HEIC') inputFormat = 'HEIC';
@@ -158,14 +143,14 @@ const FileConverter: React.FC = () => {
     });
     setFilesToProcess(prevFiles => [...prevFiles, ...newFiles]);
     setOverallError(null);
-  }, []); // No dependencies needed
+  }, []); 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     processInputFiles(event.target.files);
     event.target.value = ''; // Reset file input after selection
   };
 
-  // Drag and Drop Handlers
+  // drag and drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
@@ -182,9 +167,9 @@ const FileConverter: React.FC = () => {
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault(); // Necessary to allow drop
+      e.preventDefault(); 
       e.stopPropagation();
-      setIsDragging(true); // Keep dragging state active
+      setIsDragging(true); 
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -194,10 +179,9 @@ const FileConverter: React.FC = () => {
       processInputFiles(e.dataTransfer.files);
   }, [processInputFiles]);
 
-  // Paste Event Listener Effect
+  // paste event effect
   useEffect(() => {
       const handlePaste = (event: ClipboardEvent) => {
-        // Check if the event target is an input/textarea to avoid interfering
         const target = event.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
             return;
@@ -211,7 +195,7 @@ const FileConverter: React.FC = () => {
   }, [processInputFiles]);
 
 
-  // --- MOVE FUNCTIONS INSIDE COMPONENT ---
+  // move functions inside component
   const handleOutputFormatChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
       const selectedFormat = event.target.value as PossibleOutputFormat;
       setSelectedOutputFormat(selectedFormat);
@@ -225,10 +209,10 @@ const FileConverter: React.FC = () => {
 
       if (['HEIC', 'JPG', 'PNG', 'TIFF', 'DNG'].includes(input) && ['JPG', 'PNG', 'TIFF'].includes(output)) return true;
       if (input === 'MP4' && ['MOV', 'MP3', 'WAV'].includes(output)) {
-          return ffmpegLoaded; // Depends on FFmpeg being loaded
+          return ffmpegLoaded; 
       }
       return false;
-  }, [ffmpegLoaded]); // Re-evaluate when ffmpegLoaded changes
+  }, [ffmpegLoaded]); 
 
   const updateFileStatus = (id: string, updates: Partial<FileStatus>) => {
       setFilesToProcess(prevFiles =>
@@ -265,11 +249,11 @@ const FileConverter: React.FC = () => {
       return;
     }
 
-    // Check FFmpeg status specifically if needed for this batch
+    // check ffmpeg status specifically if needed for the batch
     const needsFFmpeg = filesToRun.some(fs => fs.inputFormat === 'MP4' && ['MOV', 'MP3', 'WAV'].includes(selectedOutputFormat));
     if (needsFFmpeg && !ffmpegLoaded) {
          setOverallError("FFmpeg is not ready, cannot process video/audio formats.");
-         return; // Don't set isProcessing if we can't start
+         return; 
     }
 
     setIsProcessing(true);
@@ -277,8 +261,7 @@ const FileConverter: React.FC = () => {
 
     const ffmpeg = ffmpegRef.current;
 
-    for (const fileStatus of filesToRun) { // Iterate only over compatible pending files
-      // Compatibility already checked, proceed directly
+    for (const fileStatus of filesToRun) { 
 
       const outputFilename = `converted_${fileStatus.file.name.split('.').slice(0, -1).join('.') || fileStatus.id}.${selectedOutputFormat.toLowerCase()}`;
       updateFileStatus(fileStatus.id, {
@@ -291,14 +274,14 @@ const FileConverter: React.FC = () => {
         const { file, inputFormat } = fileStatus;
         let outputBlob: Blob | null = null;
 
-        // --- Image Conversion (heic2any or Canvas) ---
+        // image conversion
         if (inputFormat && ['HEIC', 'JPG', 'PNG', 'TIFF', 'DNG'].includes(inputFormat) && ['JPG', 'PNG', 'TIFF'].includes(selectedOutputFormat)) {
             const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
             if (inputFormat === 'HEIC') {
                 console.log(`Converting HEIC ${file.name} to ${selectedOutputFormat}...`);
                 const conversionResult = await heic2any({ blob: file, toType: outputMimeType, quality: 0.85 });
                 outputBlob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
-            } else { // JPG, PNG, TIFF, DNG to JPG, PNG, TIFF
+            } else { 
                 console.log(`Converting ${inputFormat} ${file.name} to ${selectedOutputFormat} using Canvas...`);
                 if (selectedOutputFormat === 'TIFF') {
                     console.warn("Canvas conversion to TIFF is often unsupported by browsers. This might fail.");
@@ -306,7 +289,6 @@ const FileConverter: React.FC = () => {
                 outputBlob = await new Promise<Blob>((resolve, reject) => {
                   const outputMimeType = selectedOutputFormat === 'JPG' ? 'image/jpeg' : `image/${selectedOutputFormat.toLowerCase()}`;
                   if (inputFormat === 'TIFF' || inputFormat === 'DNG') {
-                    // Decode TIFF/DNG using UTIF.js
                     const reader = new FileReader();
                     reader.onload = (e) => {
                       if (!e.target?.result || !(e.target.result instanceof ArrayBuffer)) {
@@ -343,7 +325,6 @@ const FileConverter: React.FC = () => {
                     reader.onerror = () => reject(new Error(`File Reader error: ${reader.error?.message || 'Unknown read error'}`));
                     reader.readAsArrayBuffer(file);
                   } else {
-                    // Existing JPG/PNG conversion logic
                     const img = new Image();
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -372,7 +353,7 @@ const FileConverter: React.FC = () => {
                 });
            }
         }
-        // --- Video/Audio Conversion (FFmpeg) ---
+        // video/audio conversion
         else if (inputFormat === 'MP4' && ['MOV', 'MP3', 'WAV'].includes(selectedOutputFormat)) {
             console.log(`Converting MP4 ${file.name} to ${selectedOutputFormat} using FFmpeg...`);
             const inputFilename = `input-${fileStatus.id}.${inputFormat.toLowerCase()}`;
@@ -394,7 +375,6 @@ const FileConverter: React.FC = () => {
             const data = await ffmpeg.readFile(targetFilename);
             outputBlob = new Blob([data], { type: selectedOutputFormat === 'MOV' ? 'video/quicktime' : (selectedOutputFormat === 'MP3' ? 'audio/mpeg' : 'audio/wav') });
 
-            // Clean up FFmpeg filesystem for this conversion
             try {
                  await ffmpeg.deleteFile(inputFilename);
                  await ffmpeg.deleteFile(targetFilename);
@@ -403,7 +383,7 @@ const FileConverter: React.FC = () => {
                 console.warn(`FFmpeg cleanup failed for ${file.name}:`, cleanupError);
             }
         }
-        // --- Finalize Success ---
+        // finalize success
         if (outputBlob) {
           const url = URL.createObjectURL(outputBlob);
           updateFileStatus(fileStatus.id, { status: 'done', resultUrl: url });
@@ -416,10 +396,10 @@ const FileConverter: React.FC = () => {
         const errorMsg = error instanceof Error ? error.message : String(error);
         updateFileStatus(fileStatus.id, { status: 'error', error: errorMsg });
       }
-    } // End of loop
+    } 
 
     setIsProcessing(false);
-    // Check if any files *processed in this batch* ended with an error status
+    // check if any files processed ended with an error status
     const processedFileIds = filesToRun.map(f => f.id);
     if (filesToProcess.some(fs => processedFileIds.includes(fs.id) && fs.status === 'error')) {
         setOverallError("Some file conversions failed. Check individual file statuses.");
@@ -427,14 +407,12 @@ const FileConverter: React.FC = () => {
 
   }, [filesToProcess, selectedOutputFormat, ffmpegLoaded, isFormatCompatible, updateFileStatus, setOverallError, setIsProcessing, ffmpegRef]); // Added missing dependencies
 
-  // Calculate pending compatible files for button text
+  // calculate pending compatible files for button thing
   const pendingCompatibleFileCount = filesToProcess.filter(
       fs => fs.status === 'pending' && selectedOutputFormat && isFormatCompatible(fs, selectedOutputFormat)
   ).length;
-  // --- END MOVE FUNCTIONS INSIDE COMPONENT ---
 
 
-  // --- JSX Return ---
   return (
     <div
         className="relative p-6 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen transition-colors duration-300 flex flex-col"
@@ -443,7 +421,6 @@ const FileConverter: React.FC = () => {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
     >
-        {/* Drag Overlay */}
         {isDragging && (
             <div className="absolute inset-0 bg-blue-500/30 dark:bg-blue-800/30 border-4 border-dashed border-blue-600 dark:border-blue-400 rounded-lg flex items-center justify-center pointer-events-none z-50">
                 <p className="text-2xl font-semibold text-blue-800 dark:text-blue-200">Drop files here</p>
@@ -455,14 +432,12 @@ const FileConverter: React.FC = () => {
         Convert files directly in your browser. Your files stay on your device. Supports HEIC, JPG, PNG, TIFF images and MP4 video/audio extraction.
       </p>
 
-      {/* Overall Error Display */}
       {overallError && !isProcessing && !overallError.startsWith("Loading FFmpeg") && (
         <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 rounded text-sm flex items-center gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{overallError}</span>
         </div>
       )}
-      {/* FFmpeg Loading Indicator */}
       {overallError?.startsWith("Loading FFmpeg") && (
          <div className="mb-4 p-3 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-300 rounded text-sm flex items-center gap-2">
              <Loader2 className="w-5 h-5 flex-shrink-0 animate-spin" />
@@ -471,11 +446,9 @@ const FileConverter: React.FC = () => {
       )}
 
       <div className="flex-grow flex flex-col md:flex-row gap-6">
-        {/* Left Column: Controls */}
         <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-4">
             <div className="p-4 border border-neutral-300 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-800">
                 <h2 className="text-lg font-semibold mb-3">1. Input & Format</h2>
-                 {/* Reverted File Input Button Area */}
                  <div className="mb-4">
                      <label htmlFor="file-input" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"> Choose Files: </label>
                      <input
@@ -489,7 +462,7 @@ const FileConverter: React.FC = () => {
                      />
                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">HEIC, JPG, PNG, TIFF, DNG, MP4</p>
                  </div>
-                 {/* End Reverted File Input Button Area */}
+
 
                 <div className="mb-4">
                     <label htmlFor="output-format" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1"> Convert To: </label>
@@ -547,7 +520,6 @@ const FileConverter: React.FC = () => {
             </div>
         </div>
 
-        {/* Right Column: File List & Status */}
         <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col">
              <div className="p-4 border border-neutral-300 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-800 flex-grow overflow-y-auto min-h-[200px]">
                  <h2 className="text-lg font-semibold mb-3">2. Files & Progress</h2>
@@ -556,7 +528,7 @@ const FileConverter: React.FC = () => {
                  ) : (
                     <ul className="space-y-2">
                         {filesToProcess.map((fs) => {
-                            // Determine compatibility within the map function based on current state
+                            // compatibility in map based on current state
                             const isCompatible = selectedOutputFormat ? isFormatCompatible(fs, selectedOutputFormat) : false;
                             return (
                                 <li key={fs.id} className={`flex items-center justify-between text-sm p-2 rounded border ${
@@ -626,13 +598,6 @@ const FileConverter: React.FC = () => {
              </div>
         </div>
       </div>
-
-      {/* Optional FFmpeg Log Area (Uncomment if needed) */}
-      {/* <div className="mt-4">
-        <h3 className="text-sm font-semibold mb-1">FFmpeg Log (Debug)</h3>
-        <textarea ref={ffmpegLogRef} readOnly className="w-full h-24 p-2 border rounded text-xs bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600" placeholder="FFmpeg messages will appear here..." />
-      </div> */}
-
     </div>
   );
 };
