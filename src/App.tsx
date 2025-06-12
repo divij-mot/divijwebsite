@@ -13,8 +13,7 @@ import Contact from './pages/Contact';
 import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
-import FileConverter from './pages/FileConverter'; // Add import for FileConverter
-// import MinimalFFmpegLoader from './pages/MinimalFFMg'; // Import the MinimalFFmpegLoader component
+import FileConverter from './pages/FileConverter';
 
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -29,8 +28,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
         <MouseLight />
         <ThemeToggle />
-        <div className="md:ml-64 lg:ml-72 relative"> {/* Add lg:ml-72 */}
-          {/* Hamburger Menu Button - visible only on small screens */}
+        <div className="md:ml-64 lg:ml-72 relative">
           <button
             onClick={toggleSidebar}
             className="md:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-neutral-100/50 dark:bg-neutral-800/50 backdrop-blur-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors" // Changed fixed to absolute
@@ -38,7 +36,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <main className="p-8 pt-16 md:pt-8"> {/* Add padding-top on small screens for the button */}
+          <main className="p-8 pt-16 md:pt-8">
             {children}
           </main>
         </div>
@@ -49,10 +47,10 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 function Home() {
   return (
-    <div className="max-w-2xl lg:max-w-4xl pt-12"> {/* Added lg:max-w-4xl */}
+    <div className="max-w-2xl lg:max-w-4xl pt-12">
       <h1 className="text-5xl font-bold mb-6">Hi! I'm Divij</h1>
       <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-        I'm currently an 18-year old student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter. {/* Updated sentence structure */}
+        I'm currently an 18-year old student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter.
         This space serves as both my portfolio and a collection of useful tools I've created along the way. I hope you'll use some of them! 
       </p>
       <div className="h-px w-full bg-neutral-200 dark:bg-neutral-800 my-12" />
@@ -90,7 +88,7 @@ function App() {
           <Route path="/tools/word-counter" element={<Layout><WordCounter /></Layout>} />
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
-          <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} /> {/* Add route for FileConverter */}
+          <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

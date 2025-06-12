@@ -38,7 +38,6 @@ interface SidebarProps {
 export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   return (
     <>
-      {/* Overlay for mobile */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-30 md:hidden"
@@ -47,13 +46,11 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
       <nav
         className={`fixed inset-y-0 left-0 z-40 w-64 lg:w-72 border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 backdrop-blur-sm transition-transform duration-300 ease-in-out
                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-                   md:translate-x-0 md:h-screen md:top-0 flex flex-col`} // Added lg:w-72
+                   md:translate-x-0 md:h-screen md:top-0 flex flex-col`}
       >
-        {/* Scrollable content area */}
         <div className="flex-grow overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-8">
@@ -61,7 +58,6 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
             </div>
             
             <div className="space-y-6">
-              {/* Navigation Links */}
               <NavLink
                 to="/"
                 className={({ isActive }) =>
@@ -113,7 +109,6 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
                 Contact
               </NavLink>
 
-              {/* Tools Section */}
               <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
                 <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-4">Toolbox</div>
                 <div className="space-y-1">
@@ -142,13 +137,9 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
           </div>
         </div>
 
-        {/* Footer section (sticky at the bottom) */}
         <div className="mt-auto p-6 border-t border-neutral-200 dark:border-neutral-800 flex-shrink-0">
           <div className="flex items-center justify-center gap-4">
-            {/* <a href="https://github.com" target="_blank" rel="noopener noreferrer"
-               className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
-              <Github className="w-5 h-5" />
-            </a> */}
+
             <a href="https://x.com/DivijMot" target="_blank" rel="noopener noreferrer"
                className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
               <Twitter className="w-5 h-5" />

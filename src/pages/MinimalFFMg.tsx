@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FFmpeg } from '@ffmpeg/ffmpeg'; // Make sure this import is correct
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 function MinimalFFmpegLoader() {
   const [message, setMessage] = useState('Initializing...');
@@ -17,22 +17,18 @@ function MinimalFFmpegLoader() {
       setMessage('Minimal: Attempting to load FFmpeg (using ESM core)...');
       const ffmpeg = ffmpegRef.current;
 
-      // --- Use the ESM core from CDN ---
-      // Note: @ffmpeg/core (single-thread) is generally fine even with crossOriginIsolated=true
-      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm'; // <-- Changed to esm
+      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
       const coreURL = `${baseURL}/ffmpeg-core.js`;
       const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
-      const workerURL = `${baseURL}/ffmpeg-core.worker.js`; // <-- Added worker URL
-      // --- End ESM URLs ---
+      const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
 
       console.log("Minimal Load: Core URL", coreURL);
       console.log("Minimal Load: Wasm URL", wasmURL);
-      console.log("Minimal Load: Worker URL", workerURL); // Log the worker URL too
+      console.log("Minimal Load: Worker URL", workerURL);
       console.log('Minimal Load: crossOriginIsolated:', self.crossOriginIsolated);
 
       try {
-        // Load using ESM core, wasm, and worker URLs
-        await ffmpeg.load({ coreURL, wasmURL, workerURL }); // <-- Pass all three URLs
+        await ffmpeg.load({ coreURL, wasmURL, workerURL });
 
         setMessage('Minimal: FFmpeg loaded successfully!');
         console.log("Minimal Load: Success");
@@ -40,19 +36,15 @@ function MinimalFFmpegLoader() {
         const errorMsg = e instanceof Error ? e.message : String(e);
         setMessage(`Minimal: FFmpeg load failed: ${errorMsg}`);
         console.error("Minimal Load: Error Object", e);
-        // Add more detailed logging if possible
         if (e instanceof Error && e.stack) {
             console.error("Minimal Load: Error Stack", e.stack);
         }
       }
     };
 
-    // Removed the setTimeout, usually not necessary and can hide other timing issues
     load();
 
-    // No cleanup needed for this load pattern unless you were adding event listeners
-
-  }, []); // Empty dependency array
+  }, []);
 
   return (
       <div style={{ padding: '20px', fontFamily: 'sans-serif', border: '2px solid blue', margin: '10px' }}>
