@@ -5,12 +5,6 @@ import { ChevronRight, Github, Twitter, Linkedin } from 'lucide-react';
 
 const tools: Tool[] = [
   {
-    name: 'Live Whiteboard',
-    description: 'Collaborative whiteboard with URL sharing',
-    icon: 'pen-tool',
-    path: '/tools/whiteboard'
-  },
-  {
     name: 'Text Editor',
     description: 'In browser text editor',
     icon: 'edit',
