@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
+import { html as htmlLang } from '@codemirror/lang-html';
 import { useTheme } from '../context/ThemeContext';
 import { githubDark, githubLight } from '@uiw/codemirror-theme-github';
 import { Upload, Download, FilePlus, Edit3 } from 'lucide-react';
@@ -15,6 +16,27 @@ const TextEditor: React.FC = () => {
   const [language, setLanguage] = useState('javascript');
   const { theme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const langToExt: Record<string, string> = {
+    javascript: 'js',
+    python: 'py',
+    cpp: 'cpp',
+    java: 'java',
+    html: 'html',
+    text: 'txt',
+  };
+
+  useEffect(() => {
+    setFileName((prev) => {
+      const parts = prev.split('.');
+      const newExt = langToExt[language] || 'txt';
+      if (parts.length > 1) {
+        parts[parts.length - 1] = newExt;
+        return parts.join('.');
+      }
+      return `${prev}.${newExt}`;
+    });
+  }, [language]);
 
   const onChange = useCallback((value: string) => {
     setCode(value);
@@ -36,7 +58,9 @@ const TextEditor: React.FC = () => {
         } else if (extension === 'cpp' || extension === 'cxx' || extension === 'h' || extension === 'hpp') {
           setLanguage('cpp');
         } else if (extension === 'java') {
-            setLanguage('java');
+          setLanguage('java');
+        } else if (extension === 'html' || extension === 'htm') {
+          setLanguage('html');
         } else {
           setLanguage('text');
         }
@@ -76,6 +100,7 @@ const TextEditor: React.FC = () => {
       case 'python': return python();
       case 'cpp': return cpp();
       case 'java': return java();
+      case 'html': return htmlLang();
       default: return [];
     }
   };
@@ -96,7 +121,7 @@ const TextEditor: React.FC = () => {
           ref={fileInputRef}
           onChange={handleFileUpload}
           className="hidden"
-          accept=".txt,.js,.jsx,.ts,.tsx,.py,.cpp,.cxx,.h,.hpp,.java,.md,.html,.css,.json"
+          accept=".txt,.js,.jsx,.ts,.tsx,.py,.cpp,.cxx,.h,.hpp,.java,.html,.htm,.md,.css,.json"
         />
         <div className="flex items-center border border-neutral-300 dark:border-neutral-700 rounded-md overflow-hidden text-sm">
            <input
@@ -131,6 +156,7 @@ const TextEditor: React.FC = () => {
             <option value="python">Python</option>
             <option value="cpp">C++</option>
             <option value="java">Java</option>
+            <option value="html">HTML</option>
             <option value="text">Plain Text</option>
         </select>
       </div>
