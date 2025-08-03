@@ -43,7 +43,7 @@ Guidelines:
 - Modern: Use modern HTML5, CSS3, and ES6+ JavaScript features.
 - CRITICAL: If creating a game or complex interactive element, prioritize completing the core functionality over visual polish. A working simple game is better than a beautiful broken one. Make sure scores, buttons, movement, etc. are all working and fit on the screen no matter size.
 - ESSENTIAL: Always end with a proper closing </html> tag. Never cut off mid-function or mid-tag.
-- LENGTH: THE PAGE SHOULD BE a MAX of 8000 tokens output,
+- LENGTH: THE PAGE SHOULD BE a MAX of 12000 tokens output,
 - IMPORTANT: Your entire response must ONLY be the raw HTML code. Do not include any explanations, markdown formatting like \`\`\`html, or any text outside of the <!DOCTYPE html>...</html> document.
 
 Now, generate the HTML for the path: "${path}"`;
@@ -66,8 +66,8 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 12000, // Increased for complex games/interactive content
-        temperature: 0.7,
+        max_tokens: 15000, // Increased for complex games/interactive content
+        temperature: 0.5,
         stream: true, // Enable streaming to prevent timeout
       }),
     });
