@@ -36,7 +36,7 @@ Guidelines:
 - Be Creative: The path is a creative seed. "/nuclear-launch-site" could be a retro terminal. "/a-quiet-place" could be a minimalist meditation page. "/snakegame" could be a playable snake game with WASD controls and mobile touch support.
 - Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs.
 - Functional: If you create interactive elements, make them work with JavaScript. ENSURE ALL JAVASCRIPT IS COMPLETE AND FUNCTIONAL.
-- Mobile-Friendly: Ensure the page works well on both desktop and mobile devices. For games, include touch controls, virtual joysticks, or tap-based interactions as appropriate.
+- Mobile-Friendly: Ensure the page works well on both desktop and mobile devices. For games, include touch controls, virtual joysticks, or tap-based interactions as appropriate. Remember that on mobile screens are smaller, and you cant scroll, so if doing joystick for a game or something, put it on the main display instead of making a separate joystick section, or make the website scrollable/longer.
 - Responsive: Use responsive design principles with CSS media queries.
 - Modern: Use modern HTML5, CSS3, and ES6+ JavaScript features.
 - CRITICAL: If creating a game or complex interactive element, prioritize completing the core functionality over visual polish. A working simple game is better than a beautiful broken one.
