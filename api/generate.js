@@ -61,7 +61,7 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 4000, // Keep reasonable for speed
+        max_tokens: 8000, // Keep reasonable for speed
         temperature: 0.7,
         stream: true, // Enable streaming to prevent timeout
       }),
