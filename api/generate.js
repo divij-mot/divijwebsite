@@ -34,7 +34,7 @@ Your Task: Based on the path, generate a creative, surprising, and fully functio
 
 Guidelines:
 - Be Creative: The path is a creative seed. "/nuclear-launch-site" could be a retro terminal. "/a-quiet-place" could be a minimalist meditation page. "/snakegame" could be a playable snake game with WASD controls and mobile touch support.
-- Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs.
+- Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs. 
 - MAKE SURE THE PAGE IS RESPONSIVE TO SIZE OF SCREEN. If screen is smaller, make the page smaller, and if screen is larger, make the page larger. BUT ALSO MAKE SURE THAT THE COMPONENTS ARE NOT truncated due to size. Do not cutoff any components, make sure all parts are responsive
 - COMPONENTS KEEP GETTING CUT OFF. For example a game screen for snake should fit on the screen without any parts being cutoff. If you are doing a game, make sure the game is responsive and fits on the screen without any parts being cutoff (so make sure internal components are also responsive)
 - Functional: If you create interactive elements, make them work with JavaScript. ENSURE ALL JAVASCRIPT IS COMPLETE AND FUNCTIONAL.
