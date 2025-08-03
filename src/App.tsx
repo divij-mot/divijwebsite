@@ -14,6 +14,8 @@ import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
 import FileConverter from './pages/FileConverter';
+import QuantumPage from './pages/QuantumPage';
+import InfinitePage from './pages/InfinitePage';
 
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -89,6 +91,8 @@ function App() {
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
           <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} />
+          <Route path="/tools/quantumpage" element={<Layout><QuantumPage /></Layout>} />
+          <Route path="*" element={<InfinitePage />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

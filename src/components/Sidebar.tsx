@@ -27,6 +27,12 @@ const tools: Tool[] = [
     description: 'In Browser File Conversion',
     icon: 'repeat',
     path: '/tools/file-converter'
+  },
+  {
+    name: 'QuantumPage',
+    description: 'AI-generated infinite pages',
+    icon: 'sparkles',
+    path: '/tools/quantumpage'
   }
 ];
 
