@@ -35,10 +35,13 @@ Your Task: Based on the path, generate a creative, surprising, and fully functio
 Guidelines:
 - Be Creative: The path is a creative seed. "/nuclear-launch-site" could be a retro terminal. "/a-quiet-place" could be a minimalist meditation page. "/snakegame" could be a playable snake game with WASD controls and mobile touch support.
 - Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs.
-- Functional: If you create interactive elements, make them work with JavaScript.
+- Functional: If you create interactive elements, make them work with JavaScript. ENSURE ALL JAVASCRIPT IS COMPLETE AND FUNCTIONAL.
 - Mobile-Friendly: Ensure the page works well on both desktop and mobile devices. For games, include touch controls, virtual joysticks, or tap-based interactions as appropriate.
 - Responsive: Use responsive design principles with CSS media queries.
 - Modern: Use modern HTML5, CSS3, and ES6+ JavaScript features.
+- CRITICAL: If creating a game or complex interactive element, prioritize completing the core functionality over visual polish. A working simple game is better than a beautiful broken one.
+- ESSENTIAL: Always end with a proper closing </html> tag. Never cut off mid-function or mid-tag.
+- LENGTH: THE PAGE SHOULD BE a MAX of 8000 tokens output
 - IMPORTANT: Your entire response must ONLY be the raw HTML code. Do not include any explanations, markdown formatting like \`\`\`html, or any text outside of the <!DOCTYPE html>...</html> document.
 
 Now, generate the HTML for the path: "${path}"`;
@@ -61,7 +64,7 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 8000, // Keep reasonable for speed
+        max_tokens: 12000, // Increased for complex games/interactive content
         temperature: 0.7,
         stream: true, // Enable streaming to prevent timeout
       }),
@@ -143,8 +146,31 @@ Now, generate the HTML for the path: "${path}"`;
           // Now send the complete HTML content all at once
           if (fullContent.trim()) {
             console.log('Sending complete HTML, length:', fullContent.length);
-            // Clear any progress messages and send the real content
-            controller.enqueue(new TextEncoder().encode(fullContent));
+            
+            // Check if content was truncated (doesn't end with </html>)
+            const trimmedContent = fullContent.trim();
+            if (!trimmedContent.endsWith('</html>')) {
+              console.log('Content appears truncated, attempting to complete it');
+              
+              // Try to close any open tags gracefully
+              let fixedContent = trimmedContent;
+              
+              // If it ends mid-tag or mid-function, add basic closure
+              if (!fixedContent.includes('</script>') && fixedContent.includes('<script')) {
+                fixedContent += '\n</script>';
+              }
+              if (!fixedContent.includes('</body>') && fixedContent.includes('<body')) {
+                fixedContent += '\n</body>';
+              }
+              if (!fixedContent.endsWith('</html>')) {
+                fixedContent += '\n</html>';
+              }
+              
+              controller.enqueue(new TextEncoder().encode(fixedContent));
+            } else {
+              // Content looks complete
+              controller.enqueue(new TextEncoder().encode(fullContent));
+            }
           } else {
             controller.error(new Error('No content generated'));
           }
