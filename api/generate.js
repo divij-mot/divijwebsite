@@ -3,6 +3,8 @@ export const config = {
 };
 
 export default async function handler(request) {
+  console.log('Function invoked, method:', request.method);
+  
   if (request.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -10,13 +12,21 @@ export default async function handler(request) {
   try {
     const url = new URL(request.url);
     const path = url.searchParams.get('path') || '/unknown';
+    console.log('Path parameter:', path);
+    
+    // Quick test mode - uncomment to test function is working
+    // return new Response(`<html><body><h1>Function working! Path: ${path}</h1></body></html>`, {
+    //   headers: { 'Content-Type': 'text/html' }
+    // });
     
     const openrouterApiKey = process.env.OPENROUTER_API_KEY;
     
     if (!openrouterApiKey) {
       console.error('OpenRouter API key not found');
-      return new Response('Server configuration error', { status: 500 });
+      return new Response('Server configuration error: API key not found', { status: 500 });
     }
+    
+    console.log('API key found, length:', openrouterApiKey.length);
 
     const prompt = `You are an AI that generates complete, single-file, self-contained HTML web pages on the fly. The user has navigated to the URL path: "${path}".
 
@@ -33,6 +43,8 @@ Guidelines:
 
 Now, generate the HTML for the path: "${path}"`;
 
+    console.log('Making request to OpenRouter...');
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -42,17 +54,20 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'openrouter/horizon-beta',
+        model: 'openrouter/horizon-beta', // Using a reliable model
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 8000,
-        temperature: 0.6,
+        max_tokens: 4000, // Keep reasonable for speed
+        temperature: 0.7,
+        stream: true, // Enable streaming to prevent timeout
       }),
     });
+    
+    console.log('OpenRouter response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -60,15 +75,90 @@ Now, generate the HTML for the path: "${path}"`;
       return new Response('Failed to generate content', { status: 500 });
     }
 
-    const data = await response.json();
-    const htmlContent = data.choices[0]?.message?.content;
+    console.log('Processing streaming response and keeping connection alive...');
+    
+    // Create a stream that sends progress updates but only returns final HTML
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.error(new Error('No response body'));
+          return;
+        }
 
-    if (!htmlContent) {
-      console.error('No content generated from OpenRouter');
-      return new Response('No content generated', { status: 500 });
-    }
+        let fullContent = '';
+        let chunkCount = 0;
+        let buffer = ''; // Buffer to accumulate partial chunks
+        const decoder = new TextDecoder();
 
-    return new Response(htmlContent, {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk; // Add to buffer
+            
+            // Process complete lines from buffer
+            const lines = buffer.split('\n');
+            // Keep the last incomplete line in buffer
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim();
+                if (data === '[DONE]') {
+                  console.log('Received [DONE] signal');
+                  continue;
+                }
+                
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    fullContent += content;
+                    chunkCount++;
+                    
+                    if (chunkCount <= 5) {
+                      console.log('Content chunk:', content.substring(0, 50) + '...');
+                    }
+                    
+                    // Send periodic progress updates to keep connection alive
+                    // But don't send the actual HTML content yet
+                    if (chunkCount % 20 === 0) {
+                      console.log(`Progress update: ${chunkCount} chunks`);
+                      const progressMsg = `<!-- Progress: ${chunkCount} chunks received -->`;
+                      controller.enqueue(new TextEncoder().encode(progressMsg));
+                    }
+                  }
+                } catch (e) {
+                  console.log('Failed to parse JSON line:', data.substring(0, 100) + '...');
+                }
+              }
+            }
+          }
+          
+          console.log('Stream ended. Total chunks:', chunkCount, 'Content length:', fullContent.length);
+
+          // Now send the complete HTML content all at once
+          if (fullContent.trim()) {
+            console.log('Sending complete HTML, length:', fullContent.length);
+            // Clear any progress messages and send the real content
+            controller.enqueue(new TextEncoder().encode(fullContent));
+          } else {
+            controller.error(new Error('No content generated'));
+          }
+
+        } catch (error) {
+          controller.error(error);
+        } finally {
+          reader.releaseLock();
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/html',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -79,6 +169,8 @@ Now, generate the HTML for the path: "${path}"`;
 
   } catch (error) {
     console.error('Error in generate function:', error);
+    
+    
     return new Response('Internal server error', { status: 500 });
   }
 }

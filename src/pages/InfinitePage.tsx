@@ -19,8 +19,51 @@ const InfinitePage: React.FC = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const htmlContent = await response.text();
-        setContent(htmlContent);
+        // Handle the mixed stream - filter out progress comments and get final HTML
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body');
+        }
+
+        let accumulator = '';
+        const decoder = new TextDecoder();
+        let finalHtmlContent = '';
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value, { stream: true });
+            accumulator += chunk;
+          }
+          
+          // Extract the actual HTML content (everything after the last progress comment)
+          const progressCommentRegex = /<!--\s*Progress:.*?-->/g;
+          const cleanContent = accumulator.replace(progressCommentRegex, '').trim();
+          
+          // The final HTML should be the last substantial content
+          if (cleanContent) {
+            finalHtmlContent = cleanContent;
+          } else {
+            throw new Error('No valid HTML content received');
+          }
+          
+        } finally {
+          reader.releaseLock();
+        }
+        
+        // If it's a complete HTML document, replace the entire page
+        if (finalHtmlContent.includes('<!DOCTYPE html') || finalHtmlContent.includes('<html')) {
+          // Replace the entire document
+          document.open();
+          document.write(finalHtmlContent);
+          document.close();
+          return; // Don't continue with React rendering
+        } else {
+          // If it's just HTML content, use it with dangerouslySetInnerHTML
+          setContent(finalHtmlContent);
+        }
       } catch (err) {
         console.error('Error generating page:', err);
         setError(err instanceof Error ? err.message : 'Failed to generate page');
