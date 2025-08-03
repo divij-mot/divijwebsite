@@ -1420,6 +1420,13 @@ if (!isNameSet && !forceConnect) {
                    </div>
                 )}
 
+                {!isNameSet && (
+                    <div className="mb-3 p-3 bg-red-600 dark:bg-red-700 rounded-md flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-white flex-shrink-0" />
+                        <p className="text-sm text-white">Please enter a name to start sharing files and connecting to peers</p>
+                    </div>
+                )}
+
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-1">Your ID:</p>
                  <code className="text-sm px-2 py-1 bg-neutral-200 dark:bg-neutral-700 rounded font-mono break-all block mb-3">{userId || 'Connecting...'}</code>
 
