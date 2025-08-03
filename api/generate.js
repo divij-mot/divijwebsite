@@ -35,7 +35,8 @@ Your Task: Based on the path, generate a creative, surprising, and fully functio
 Guidelines:
 - Be Creative: The path is a creative seed. "/nuclear-launch-site" could be a retro terminal. "/a-quiet-place" could be a minimalist meditation page. "/snakegame" could be a playable snake game with WASD controls and mobile touch support.
 - Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs.
-- MAKE SURE THE PAGE IS RESPONSIVE TO SIZE OF SCREEN. If screen is smaller, make the page smaller, and if screen is larger, make the page larger.
+- MAKE SURE THE PAGE IS RESPONSIVE TO SIZE OF SCREEN. If screen is smaller, make the page smaller, and if screen is larger, make the page larger. BUT ALSO MAKE SURE THAT THE COMPONENTS ARE NOT truncated due to size. Do not cutoff any components, make sure all parts are responsive
+- COMPONENTS KEEP GETTING CUT OFF. For example a game screen for snake should fit on the screen without any parts being cutoff. If you are doing a game, make sure the game is responsive and fits on the screen without any parts being cutoff (so make sure internal components are also responsive)
 - Functional: If you create interactive elements, make them work with JavaScript. ENSURE ALL JAVASCRIPT IS COMPLETE AND FUNCTIONAL.
 - Mobile-Friendly: Ensure the page works well on both desktop and mobile devices. For games, include touch controls, virtual joysticks, or tap-based interactions as appropriate. Remember that on mobile screens are smaller, and you cant scroll, so if doing joystick for a game or something, put it on the main display instead of making a separate joystick section, or make the website smaller.
 - Responsive: Use responsive design principles with CSS media queries.
@@ -167,10 +168,28 @@ Now, generate the HTML for the path: "${path}"`;
                 fixedContent += '\n</html>';
               }
               
+              // Inject home button before closing body tag
+              const homeButton = `
+<div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+  </svg>
+</div>`;
+              
+              fixedContent = fixedContent.replace('</body>', homeButton + '\n</body>');
+              
               controller.enqueue(new TextEncoder().encode(fixedContent));
             } else {
-              // Content looks complete
-              controller.enqueue(new TextEncoder().encode(fullContent));
+              // Content looks complete - still inject home button
+              const homeButton = `
+<div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+  </svg>
+</div>`;
+              
+              const contentWithHomeBtn = fullContent.replace('</body>', homeButton + '\n</body>');
+              controller.enqueue(new TextEncoder().encode(contentWithHomeBtn));
             }
           } else {
             controller.error(new Error('No content generated'));

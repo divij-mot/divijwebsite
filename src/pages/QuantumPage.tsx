@@ -31,6 +31,11 @@ const QuantumPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-neutral-900 dark:text-neutral-100 mb-2">
+            Quantum Page
+          </h1>
+        </div>
         <form onSubmit={handleSubmit} className="flex flex-col items-center">
           <input
             type="text"
