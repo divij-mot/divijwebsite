@@ -34,7 +34,14 @@ interface FileTransferProgress {
   };
 }
 
-const generateLocalId = () => Math.random().toString(36).substring(2, 15);
+const generateLocalId = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoiding confusing chars like 0, O, I, 1
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;

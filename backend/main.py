@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import uuid
 import asyncio
+import random
+import string
 from typing import Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -94,10 +96,26 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+def generate_short_id(length: int = 6) -> str:
+    """Generate a short, user-friendly ID using uppercase letters and numbers."""
+    # Use uppercase letters and numbers for better readability
+    chars = string.ascii_uppercase + string.digits
+    # Avoid confusing characters like 0, O, I, 1
+    chars = chars.replace('0', '').replace('O', '').replace('I', '').replace('1', '')
+    return ''.join(random.choice(chars) for _ in range(length))
+
 @app.get("/generate-id")
 async def generate_id_route() -> dict:
-    """Generate a unique ID for a new client."""
-    return {"id": str(uuid.uuid4())}
+    """Generate a unique short ID for a new client."""
+    # Generate ID and check for collisions (very unlikely but good practice)
+    max_attempts = 10
+    for _ in range(max_attempts):
+        new_id = generate_short_id()
+        if new_id not in manager.active_connections:
+            return {"id": new_id}
+    
+    # Fallback to longer ID if collision occurs (extremely rare)
+    return {"id": generate_short_id(8)}
 
 @app.get("/healthz")
 async def health_check() -> dict:
