@@ -46,6 +46,7 @@ Non-negotiables
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
 - **Length cap:** Keep total output ≤ 12,000 tokens.
+- **Length2:** USE ALL THE TOKENS YOU CAN, IMPLEMENT ALL THE FUNCTIONALIRTY YOU CAN MAKE IT GOOD LOOKING ETC. IT SHOULD NOT BE BASIC.
 
 Global layout rules (apply to every page)
 1. Include \`<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\`.
