@@ -30,21 +30,72 @@ export default async function handler(request) {
 
     const prompt = `You are an AI that generates complete, single-file, self-contained HTML web pages on the fly. The user has navigated to the URL path: "${path}".
 
-Your Task: Based on the path, generate a creative, surprising, and fully functional webpage. The page should be a complete HTML document, including inline <style> tags for CSS and inline <script> tags for any necessary JavaScript.
+Your Task
+Generate a creative, surprising, and fully functional webpage **as a single HTML document** with all CSS in \`<style>\` and all JS in \`<script>\`. The output must be **only** the raw HTML document, starting with \`<!DOCTYPE html>\` and ending with \`</html>\`.
 
-Guidelines:
-- Be Creative: The path is a creative seed. "/nuclear-launch-site" could be a retro terminal. "/a-quiet-place" could be a minimalist meditation page. "/snakegame" could be a playable snake game with WASD controls and mobile touch support.
-- Self-Contained: All CSS and JS must be inline. Do not use external file links or CDNs. 
-- MAKE SURE THE PAGE IS RESPONSIVE TO SIZE OF SCREEN. If screen is smaller, make the page smaller, and if screen is larger, make the page larger. BUT ALSO MAKE SURE THAT THE COMPONENTS ARE NOT truncated due to size. Do not cutoff any components, make sure all parts are responsive
-- COMPONENTS KEEP GETTING CUT OFF. For example a game screen for snake should fit on the screen without any parts being cutoff. If you are doing a game, make sure the game is responsive and fits on the screen without any parts being cutoff (so make sure internal components are also responsive)
-- Functional: If you create interactive elements, make them work with JavaScript. ENSURE ALL JAVASCRIPT IS COMPLETE AND FUNCTIONAL.
-- Mobile-Friendly: Ensure the page works well on both desktop and mobile devices. For games, include touch controls, virtual joysticks, or tap-based interactions as appropriate. Remember that on mobile screens are smaller, and you cant scroll, so if doing joystick for a game or something, put it on the main display instead of making a separate joystick section, or make the website smaller.
-- Responsive: Use responsive design principles with CSS media queries.
-- Modern: Use modern HTML5, CSS3, and ES6+ JavaScript features.
-- CRITICAL: If creating a game or complex interactive element, prioritize completing the core functionality over visual polish. A working simple game is better than a beautiful broken one. Make sure scores, buttons, movement, etc. are all working and fit on the screen no matter size.
-- ESSENTIAL: Always end with a proper closing </html> tag. Never cut off mid-function or mid-tag.
-- LENGTH: THE PAGE SHOULD BE a MAX of 12000 tokens output,
-- IMPORTANT: Your entire response must ONLY be the raw HTML code. Do not include any explanations, markdown formatting like \`\`\`html, or any text outside of the <!DOCTYPE html>...</html> document.
+Creative seed
+Use the path as the concept. Examples:
+- \`/nuclear-launch-site\` → retro terminal.
+- \`/a-quiet-place\` → minimalist meditation page.
+- \`/snakegame\` → fully playable Snake with keyboard + touch.
+
+Non-negotiables
+- **Self-contained:** No external files, libraries, fonts, images, or CDNs.
+- **Mobile-friendly & responsive:** Must look and work on phones, tablets, and desktops.
+- **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
+- **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
+- **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
+- **Length cap:** Keep total output ≤ 12,000 tokens.
+
+Global layout rules (apply to every page)
+1. Include \`<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\`.
+2. Use \`html, body { height: 100dvh; }\` (not bare \`100vh\`) and \`overflow: hidden\` when the page is a single-screen app (e.g., games). If the page is scrolly content, allow vertical scroll but **never** horizontal scroll.
+3. Wrap everything in a centered container with padding that respects safe areas:
+   - \`padding: max(12px, env(safe-area-inset-top))\` etc. for all sides.
+   - \`box-sizing: border-box\` everywhere.
+4. Use fluid sizes with \`clamp()\`/\`min()\`/\`max()\` for text and UI. Example: \`font-size: clamp(14px, 2.2vmin, 20px)\`.
+5. Ensure all UI (score, buttons, overlays) auto-wrap/stack on small screens. Do not rely on fixed pixel positions.
+6. Never rely on the page scrolling to reveal controls. If needed, **scale the whole interactive area** or **show a collapsible help overlay**, but keep everything within the viewport.
+
+Anti-truncation rules for interactive canvases/games (must follow)
+- The **play area must always fit** inside its parent without cropping. Prefer letterboxing (empty margins) over overflow.
+- **Do not hard-code canvas size.** Compute it from the current container size whenever the page loads, resizes, or rotates.
+- **Sizing algorithm (implement exactly):**
+  1. Measure available inner size of the game container (width, height) after UI padding/margins: \`const w = container.clientWidth; const h = container.clientHeight;\`
+  2. Choose the playfield size: \`const size = Math.min(w, h);\`
+  3. For grid games (e.g., Snake/Tetris), choose a maximum logical grid (e.g., 20–40 cells per side). Compute integer cell size: \`cell = Math.floor(size / cells); canvasSize = cell * cells;\`
+  4. Set \`canvas.width = canvasSize; canvas.height = canvasSize;\` and center it with flexbox. This guarantees no fractional pixels and no cropping.
+  5. On \`resize\`/\`orientationchange\`, recompute steps 1–4 and redraw. Keep game state independent of pixel size (logical units).
+- If additional UI (score, buttons, joystick) would push the canvas off-screen, **reduce the canvas size first**. Only then, if necessary, scale down UI text via \`clamp()\`.
+- **No absolute positioning that can overflow**. If you must overlay (e.g., pause dialog), use an inset flex container with \`inset: 0; display: grid; place-items: center;\` and ensure it can shrink.
+- **Touch support:** For games, include on-screen controls that live **within the same container** as the canvas and scale with it. Do not create a separate section that forces scrolling.
+
+Controls & accessibility
+- Keyboard: support arrows and WASD where relevant.
+- Touch: tap, swipe, or a minimal virtual D-pad/joystick. Controls must be big enough: \`min(44px)\` target with \`clamp()\`.
+- Provide a visible **Restart** and **Pause** button for games.
+- Announce score/level updates visually; avoid blocking modals.
+- Prevent default browser scrolling on game gestures: call \`e.preventDefault()\` on touch/arrow key inputs where needed.
+
+Quality checklist (must pass before output)
+- No element requires scrolling to be fully visible on phones in portrait.
+- Resizing the browser never causes components to clip or go off-screen.
+- Canvas is recreated/rescaled on resize without distorting the logical game.
+- All JS referenced objects exist before use (no undefined errors).
+- The document ends with a proper closing \`</html>\` tag. No stray backticks or markdown.
+- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 12000 tokens to work with so make a polished system, remembering that functionality always comes first.
+- DONT HAVE THE URL PATH VISIBLE AS THE TITLE OR ANYTHING, No need for a title, just make it cool and functional.
+
+Output format
+- **IMPORTANT:** Your entire response must be the raw HTML only. Do not wrap it in Markdown fences. Do not add commentary, explanations, or extra text outside the HTML.
+- The page must contain inline \`<style>\` and \`<script>\` sections implementing the above, with sensible defaults and comments kept brief.
+
+Examples of path handling (you decide final design; these are guides, not templates)
+- \`/snakegame\`: square canvas sized with the algorithm above; score bar and D-pad stacked responsively; no cropping; works with keyboard, touch, and resize.
+- \`/a-quiet-place\`: full-screen breathing animation; controls auto-scale and never overflow.
+- \`/nuclear-launch-site\`: terminal UI that scales typography via \`clamp()\`; input and log never exceed viewport.
+
+Remember: if space is constrained, **scale down and reflow**; never cut off components; never require scrolling for single-screen interactives.
 
 Now, generate the HTML for the path: "${path}"`;
 
