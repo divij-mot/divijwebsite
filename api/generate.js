@@ -219,25 +219,187 @@ Now, generate the HTML for the path: "${path}"`;
                 fixedContent += '\n</html>';
               }
               
-              // Inject home button before closing body tag
+              // Inject home button and share button before closing body tag
               const homeButton = `
 <div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
   </svg>
-</div>`;
+</div>
+<div id="quantum-share-btn" style="position: fixed; top: 20px; right: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="shareCurrentPage()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.50-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+  </svg>
+</div>
+<script>
+async function shareCurrentPage() {
+  try {
+    const content = document.documentElement.outerHTML;
+    const title = document.title || 'QuantumPage';
+    
+    const response = await fetch('/api/save-page-blob', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content, title })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const fullUrl = window.location.origin + data.link;
+      
+      // Always copy to clipboard, no web share API
+      await navigator.clipboard.writeText(fullUrl);
+      
+      // Show a nice notification
+      showShareNotification('Permanent link copied!');
+    } else {
+      showShareNotification('Failed to create permanent link', true);
+    }
+  } catch (error) {
+    console.error('Share error:', error);
+    showShareNotification('Failed to share page', true);
+  }
+}
+
+function showShareNotification(message, isError = false) {
+  // Remove existing notification if any
+  const existing = document.getElementById('quantum-share-notification');
+  if (existing) existing.remove();
+  
+  // Create notification
+  const notification = document.createElement('div');
+  notification.id = 'quantum-share-notification';
+  notification.style.cssText = \`
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    background: \${isError ? 'rgba(220, 38, 38, 0.95)' : 'rgba(34, 197, 94, 0.95)'};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    backdrop-filter: blur(10px);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  \`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Animate in
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+  
+  // Animate out and remove
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+</script>`;
               
               fixedContent = fixedContent.replace('</body>', homeButton + '\n</body>');
               
               controller.enqueue(new TextEncoder().encode(fixedContent));
             } else {
-              // Content looks complete - still inject home button
+              // Content looks complete - still inject home button and share button
               const homeButton = `
 <div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
   </svg>
-</div>`;
+</div>
+<div id="quantum-share-btn" style="position: fixed; top: 20px; right: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="shareCurrentPage()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.50-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+  </svg>
+</div>
+<script>
+async function shareCurrentPage() {
+  try {
+    const content = document.documentElement.outerHTML;
+    const title = document.title || 'QuantumPage';
+    
+    const response = await fetch('/api/save-page-blob', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content, title })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const fullUrl = window.location.origin + data.link;
+      
+      // Always copy to clipboard, no web share API
+      await navigator.clipboard.writeText(fullUrl);
+      
+      // Show a nice notification
+      showShareNotification('Permanent link copied!');
+    } else {
+      showShareNotification('Failed to create permanent link', true);
+    }
+  } catch (error) {
+    console.error('Share error:', error);
+    showShareNotification('Failed to share page', true);
+  }
+}
+
+function showShareNotification(message, isError = false) {
+  // Remove existing notification if any
+  const existing = document.getElementById('quantum-share-notification');
+  if (existing) existing.remove();
+  
+  // Create notification
+  const notification = document.createElement('div');
+  notification.id = 'quantum-share-notification';
+  notification.style.cssText = \`
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    background: \${isError ? 'rgba(220, 38, 38, 0.95)' : 'rgba(34, 197, 94, 0.95)'};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    backdrop-filter: blur(10px);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  \`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Animate in
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+  
+  // Animate out and remove
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+</script>`;
               
               const contentWithHomeBtn = fullContent.replace('</body>', homeButton + '\n</body>');
               controller.enqueue(new TextEncoder().encode(contentWithHomeBtn));
