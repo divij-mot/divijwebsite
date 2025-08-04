@@ -24,6 +24,7 @@
     "@types/simple-peer": "^9.11.8",
     "@uiw/codemirror-theme-github": "^4.23.10",
     "@uiw/react-codemirror": "^4.23.10",
+    "@vercel/blob": "^1.1.1",
     "fabric": "^6.6.4",
     "heic2any": "^0.0.4",
     "lucide-react": "^0.344.0",

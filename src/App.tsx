@@ -92,6 +92,7 @@ function App() {
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
           <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} />
           <Route path="/tools/quantumpage" element={<Layout><QuantumPage /></Layout>} />
+          <Route path="/quantumpage/:uuid" element={<InfinitePage />} />
           <Route path="*" element={<InfinitePage />} />
         </Routes>
       </BrowserRouter>

@@ -1,81 +1,103 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 const InfinitePage: React.FC = () => {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const location = useLocation();
+  const { uuid } = useParams<{ uuid: string }>();
 
   useEffect(() => {
-    const generatePage = async () => {
+    const loadPage = async () => {
       setLoading(true);
       setError(null);
       
       try {
-        const response = await fetch(`/api/generate?path=${encodeURIComponent(location.pathname)}`);
+        let response;
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        // Handle the mixed stream - filter out progress comments and get final HTML
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('No response body');
-        }
-
-        let accumulator = '';
-        const decoder = new TextDecoder();
-        let finalHtmlContent = '';
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value, { stream: true });
-            accumulator += chunk;
+        // Check if this is a UUID-based permanent link
+        if (uuid) {
+          // Load saved content by UUID
+          response = await fetch(`/api/get-page-blob?uuid=${encodeURIComponent(uuid)}`);
+          
+          if (!response.ok) {
+            throw new Error('Saved page not found or expired');
           }
           
-          // Extract the actual HTML content (everything after the last progress comment)
-          const progressCommentRegex = /<!--\s*Progress:.*?-->/g;
-          const cleanContent = accumulator.replace(progressCommentRegex, '').trim();
+          const htmlContent = await response.text();
           
-          // The final HTML should be the last substantial content
-          if (cleanContent) {
-            finalHtmlContent = cleanContent;
-          } else {
-            throw new Error('No valid HTML content received');
-          }
-          
-        } finally {
-          reader.releaseLock();
-        }
-        
-        // If it's a complete HTML document, replace the entire page
-        if (finalHtmlContent.includes('<!DOCTYPE html') || finalHtmlContent.includes('<html')) {
-          // Replace the entire document
+          // Replace the entire document for saved pages
           document.open();
-          document.write(finalHtmlContent);
+          document.write(htmlContent);
           document.close();
-          return; // Don't continue with React rendering
+          return;
         } else {
-          // If it's just HTML content, use it with dangerouslySetInnerHTML
-          setContent(finalHtmlContent);
+          // Generate new content for regular paths
+          response = await fetch(`/api/generate?path=${encodeURIComponent(location.pathname)}`);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          // Handle the mixed stream - filter out progress comments and get final HTML
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('No response body');
+          }
+
+          let accumulator = '';
+          const decoder = new TextDecoder();
+          let finalHtmlContent = '';
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value, { stream: true });
+              accumulator += chunk;
+            }
+            
+            // Extract the actual HTML content (everything after the last progress comment)
+            const progressCommentRegex = /<!--\s*Progress:.*?-->/g;
+            const cleanContent = accumulator.replace(progressCommentRegex, '').trim();
+            
+            // The final HTML should be the last substantial content
+            if (cleanContent) {
+              finalHtmlContent = cleanContent;
+            } else {
+              throw new Error('No valid HTML content received');
+            }
+            
+          } finally {
+            reader.releaseLock();
+          }
+          
+          // If it's a complete HTML document, replace the entire page
+          if (finalHtmlContent.includes('<!DOCTYPE html') || finalHtmlContent.includes('<html')) {
+            // Replace the entire document
+            document.open();
+            document.write(finalHtmlContent);
+            document.close();
+            return; // Don't continue with React rendering
+          } else {
+            // If it's just HTML content, use it with dangerouslySetInnerHTML
+            setContent(finalHtmlContent);
+          }
         }
       } catch (err) {
-        console.error('Error generating page:', err);
-        setError(err instanceof Error ? err.message : 'Failed to generate page');
+        console.error('Error loading page:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load page');
       } finally {
         setLoading(false);
       }
     };
 
-    if (location.pathname !== '/') {
-      generatePage();
+    if (location.pathname !== '/' || uuid) {
+      loadPage();
     }
-  }, [location.pathname]);
+  }, [location.pathname, uuid]);
 
   if (loading) {
     return (
