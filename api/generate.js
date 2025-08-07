@@ -118,9 +118,12 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 15000, // Increased for complex games/interactive content
+        max_tokens: 20000, // Increased for complex games/interactive content
         temperature: 0.5,
         stream: true, // Enable streaming to prevent timeout
+        reasoning: {
+          effort: "low" // Set reasoning effort to low for efficient processing
+        },
       }),
     });
     
