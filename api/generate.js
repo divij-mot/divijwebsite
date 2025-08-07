@@ -111,7 +111,7 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'openrouter/horizon-beta', // Using a reliable model
+        model: 'openai/gpt-5', // Using a reliable model
         messages: [
           {
             role: 'user',
