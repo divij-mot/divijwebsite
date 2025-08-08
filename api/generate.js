@@ -111,7 +111,7 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5', // Using a reliable model
+        model: 'anthropic/claude-sonnet-4', // Using a reliable model
         messages: [
           {
             role: 'user',
@@ -121,9 +121,7 @@ Now, generate the HTML for the path: "${path}"`;
         max_tokens: 20000, // Increased for complex games/interactive content
         temperature: 0.5,
         stream: true, // Enable streaming to prevent timeout
-        reasoning: {
-          effort: "low" // Set reasoning effort to low for efficient processing
-        },
+        
       }),
     });
     
