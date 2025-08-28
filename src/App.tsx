@@ -10,6 +10,7 @@ import About from './pages/About';
 import Portfolio from './pages/Portfolio';
 import Blog from './pages/Blog';
 import Contact from './pages/Contact';
+import Resume from './pages/Resume';
 import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
@@ -18,8 +19,8 @@ import QuantumPage from './pages/QuantumPage';
 import InfinitePage from './pages/InfinitePage';
 
 
-function Layout({ children }: { children: React.ReactNode }) {
-  const { theme, themeTransitionPos } = useTheme();
+function Layout({ children, isFullScreen = false }: { children: React.ReactNode; isFullScreen?: boolean }) {
+  const { theme } = useTheme();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -29,7 +30,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-white dark:bg-neutral-900 text-black dark:text-white transition-colors duration-300">
         <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
         <MouseLight />
-        <ThemeToggle />
+        {!isFullScreen && <ThemeToggle />}
         <div className="md:ml-64 lg:ml-72 relative">
           <button
             onClick={toggleSidebar}
@@ -38,7 +39,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <main className="p-8 pt-16 md:pt-8">
+          <main className={isFullScreen ? "h-screen" : "p-8 pt-16 md:pt-8"}>
             {children}
           </main>
         </div>
@@ -87,6 +88,7 @@ function App() {
           <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />
           <Route path="/blog" element={<Layout><Blog /></Layout>} />
           <Route path="/contact" element={<Layout><Contact /></Layout>} />
+          <Route path="/resume" element={<Layout isFullScreen={true}><Resume /></Layout>} />
           <Route path="/tools/word-counter" element={<Layout><WordCounter /></Layout>} />
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />

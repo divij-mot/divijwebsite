@@ -95,6 +95,16 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
                 Portfolio
               </NavLink>
               <NavLink
+                to="/resume"
+                className={({ isActive }) =>
+                  `block transition-colors hover:text-neutral-800 dark:hover:text-neutral-200 ${
+                    isActive ? 'text-black dark:text-white font-medium' : 'text-neutral-500'
+                  }`
+                }
+              >
+                Resume
+              </NavLink>
+              <NavLink
                 to="/blog"
                 className={({ isActive }) =>
                   `block transition-colors hover:text-neutral-800 dark:hover:text-neutral-200 ${
