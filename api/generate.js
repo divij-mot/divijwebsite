@@ -111,7 +111,7 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4', // Using a reliable model
+        model: 'anthropic/claude-sonnet-4.5', // Using a reliable model
         messages: [
           {
             role: 'user',
