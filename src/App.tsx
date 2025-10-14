@@ -10,7 +10,6 @@ import About from './pages/About';
 import Portfolio from './pages/Portfolio';
 import Blog from './pages/Blog';
 import Contact from './pages/Contact';
-import Resume from './pages/Resume';
 import WordCounter from './pages/WordCounter';
 import TextEditor from './pages/TextEditor';
 import Share from './pages/Share';
@@ -88,7 +87,6 @@ function App() {
           <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />
           <Route path="/blog" element={<Layout><Blog /></Layout>} />
           <Route path="/contact" element={<Layout><Contact /></Layout>} />
-          <Route path="/resume" element={<Layout isFullScreen={true}><Resume /></Layout>} />
           <Route path="/tools/word-counter" element={<Layout><WordCounter /></Layout>} />
           <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
           <Route path="/tools/share" element={<Layout><Share /></Layout>} />
