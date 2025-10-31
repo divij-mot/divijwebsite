@@ -44,3 +44,33 @@ html, body {
   animation-duration: 600ms;
 }
 
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+    color: inherit;
+  }
+  50% {
+    opacity: 0.85;
+    color: rgb(185, 28, 28); /* Dull red, same as text-red-700 */
+  }
+}
+
+@keyframes subtle-pulse-dark {
+  0%, 100% {
+    opacity: 1;
+    color: rgb(245, 245, 245); /* White */
+  }
+  50% {
+    opacity: 0.85;
+    color: rgb(185, 28, 28); /* Dull red */
+  }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 4.5s ease-in-out infinite;
+}
+
+.animate-subtle-pulse-dark {
+  animation: subtle-pulse-dark 4.5s ease-in-out infinite;
+}
+

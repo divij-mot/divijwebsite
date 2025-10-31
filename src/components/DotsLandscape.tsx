@@ -37,6 +37,30 @@ export const DotsLandscape: React.FC<DotsLandscapeProps> = ({ isDark = false }) 
       // Start from bottom 40% of screen
       const startRow = Math.floor(rows * 0.6);
       
+      // Calculate color transition ONCE per frame (not per dot - huge performance boost!)
+      if (!canvas.dataset.currentDotR) {
+        canvas.dataset.currentDotR = isDark ? '200' : '50';
+        canvas.dataset.currentDotG = isDark ? '200' : '50';
+        canvas.dataset.currentDotB = isDark ? '200' : '50';
+      }
+      
+      const targetR = isDark ? 200 : 50;
+      const targetG = isDark ? 200 : 50;
+      const targetB = isDark ? 200 : 50;
+      
+      const currentDotR = parseFloat(canvas.dataset.currentDotR || '200');
+      const currentDotG = parseFloat(canvas.dataset.currentDotG || '200');
+      const currentDotB = parseFloat(canvas.dataset.currentDotB || '200');
+      
+      const lerpSpeed = 0.15; // Faster and matches SimpleDither
+      const newDotR = currentDotR + (targetR - currentDotR) * lerpSpeed;
+      const newDotG = currentDotG + (targetG - currentDotG) * lerpSpeed;
+      const newDotB = currentDotB + (targetB - currentDotB) * lerpSpeed;
+      
+      canvas.dataset.currentDotR = String(newDotR);
+      canvas.dataset.currentDotG = String(newDotG);
+      canvas.dataset.currentDotB = String(newDotB);
+      
       // Draw landscape dots
       for (let y = startRow; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
@@ -71,9 +95,8 @@ export const DotsLandscape: React.FC<DotsLandscapeProps> = ({ isDark = false }) 
               ? 0.3 + normY * 0.5 + elevation * 0.2
               : 0.4 + normY * 0.4 + elevation * 0.2;
             
-            ctx.fillStyle = isDark 
-              ? `rgba(200, 200, 200, ${Math.min(opacity, 0.9)})` 
-              : `rgba(50, 50, 50, ${Math.min(opacity, 0.8)})`;
+            // Use pre-calculated color (much more efficient!)
+            ctx.fillStyle = `rgba(${newDotR}, ${newDotG}, ${newDotB}, ${Math.min(opacity, isDark ? 0.9 : 0.8)})`;
             
             ctx.beginPath();
             ctx.arc(posX, posY, size, 0, Math.PI * 2);

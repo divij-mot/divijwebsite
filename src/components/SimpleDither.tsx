@@ -26,10 +26,32 @@ export const SimpleDither: React.FC<SimpleDitherProps> = ({ isDark = false }) =>
       const width = canvas.width;
       const height = canvas.height;
 
-      // Base color - brighter in dark mode
-      const baseColor = isDark 
+      // Base color - brighter in dark mode with smooth transition
+      const targetColor = isDark 
         ? { r: 45, g: 45, b: 45 }
         : { r: 238, g: 229, b: 213 };
+      
+      // Smooth color interpolation
+      if (!canvas.dataset.currentR) {
+        canvas.dataset.currentR = String(targetColor.r);
+        canvas.dataset.currentG = String(targetColor.g);
+        canvas.dataset.currentB = String(targetColor.b);
+      }
+      
+      const currentR = parseFloat(canvas.dataset.currentR);
+      const currentG = parseFloat(canvas.dataset.currentG);
+      const currentB = parseFloat(canvas.dataset.currentB);
+      
+      const lerpSpeed = 0.15; // Faster for snappier transitions
+      const newR = currentR + (targetColor.r - currentR) * lerpSpeed;
+      const newG = currentG + (targetColor.g - currentG) * lerpSpeed;
+      const newB = currentB + (targetColor.b - currentB) * lerpSpeed;
+      
+      canvas.dataset.currentR = String(newR);
+      canvas.dataset.currentG = String(newG);
+      canvas.dataset.currentB = String(newB);
+      
+      const baseColor = { r: newR, g: newG, b: newB };
 
       // Create image data
       const imageData = ctx.createImageData(width, height);
