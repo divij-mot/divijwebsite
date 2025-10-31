@@ -43,7 +43,7 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden transition-colors duration-500" style={{ fontFamily: 'Georgia, serif' }}>
+    <div className="fixed inset-0 overflow-hidden transition-colors duration-500" style={{ fontFamily: 'Georgia, serif' }}>
       <SimpleDither isDark={isDark} />
       <DotsLandscape isDark={isDark} />
       
@@ -53,8 +53,10 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
         onClick={secretRevealed ? () => onEnter(isDark) : toggleTheme}
       />
 
-      {/* Main Content */}
-      <div className="relative z-10 max-w-2xl mx-auto px-6 pt-32 pb-64">
+      {/* Main Content - Scrollable Container */}
+      <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
+        <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
+          <div className="max-w-2xl w-full">
         <h1 
           onClick={handleNameClick}
           className={`text-4xl md:text-5xl font-bold mb-4 cursor-pointer transition-colors duration-500 ${
@@ -127,6 +129,8 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
           }`}>
             © 2025 Divij Motwani. All rights reserved.
           </p>
+        </div>
+          </div>
         </div>
       </div>
     </div>

@@ -18,7 +18,7 @@ export const Writings: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ fontFamily: 'Georgia, serif' }}>
+    <div className="fixed inset-0 overflow-hidden" style={{ fontFamily: 'Georgia, serif' }}>
       <SimpleDither isDark={isDark} />
       <DotsLandscape isDark={isDark} />
       
@@ -41,8 +41,10 @@ export const Writings: React.FC = () => {
         <ArrowLeft className="w-5 h-5" />
       </button>
 
-      {/* Main Content */}
-      <div className="relative z-10 max-w-2xl mx-auto px-6 pt-32 pb-64">
+      {/* Main Content - Scrollable Container */}
+      <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
+        <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
+          <div className="max-w-2xl w-full">
         <h1 className={`text-4xl md:text-5xl font-bold mb-8 transition-colors duration-300 ${
           isDark ? 'text-neutral-100' : 'text-neutral-900'
         }`}>
@@ -67,6 +69,8 @@ export const Writings: React.FC = () => {
           }`}>
             © 2025 Divij Motwani. All rights reserved.
           </p>
+        </div>
+          </div>
         </div>
       </div>
     </div>

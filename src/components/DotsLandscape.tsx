@@ -34,8 +34,8 @@ export const DotsLandscape: React.FC<DotsLandscapeProps> = ({ isDark = false }) 
       const cols = Math.ceil(canvas.width / dotSpacing);
       const rows = Math.ceil(canvas.height / dotSpacing);
       
-      // Start from bottom 40% of screen
-      const startRow = Math.floor(rows * 0.6);
+      // Start from bottom 30% of screen (so it doesn't cover footer text)
+      const startRow = Math.floor(rows * 0.7);
       
       // Calculate color transition ONCE per frame (not per dot - huge performance boost!)
       if (!canvas.dataset.currentDotR) {
@@ -123,7 +123,7 @@ export const DotsLandscape: React.FC<DotsLandscapeProps> = ({ isDark = false }) 
     <canvas
       ref={canvasRef}
       className="fixed inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 1 }}
+      style={{ zIndex: 1, bottom: 0 }}
     />
   );
 };
