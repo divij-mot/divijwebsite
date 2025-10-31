@@ -87,11 +87,15 @@ function Home() {
 }
 
 function AppRouter() {
-  const [showFancySite, setShowFancySite] = useState(false);
+  const location = useLocation();
+  
+  // Automatically show fancy site if not on root path
+  const [showFancySite, setShowFancySite] = useState(() => {
+    return location.pathname !== '/';
+  });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionDirection, setTransitionDirection] = useState<'to-fancy' | 'to-minimal'>('to-fancy');
   const [fromColor, setFromColor] = useState('#FFFFFF');
-  const location = useLocation();
 
   const handleEnterSite = (isDark: boolean) => {
     // Set the starting color based on current theme
