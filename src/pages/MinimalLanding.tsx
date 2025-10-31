@@ -21,7 +21,7 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
       if (!hasClickedName) {
         setShowPulse(true);
       }
-    }, 15000);
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, [hasClickedName]);
