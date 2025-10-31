@@ -72,7 +72,7 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
 
         <div className="flex gap-4 mb-8">
           <a
-            href="https://github.com/divijmotwani"
+            href="https://github.com/divij-mot"
             target="_blank"
             rel="noopener noreferrer"
             className={`text-sm underline transition-colors duration-300 ${
@@ -84,7 +84,7 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
             GitHub
           </a>
           <a
-            href="https://www.linkedin.com/in/divij-motwani/"
+            href="https://www.linkedin.com/in/divijmotwani/"
             target="_blank"
             rel="noopener noreferrer"
             className={`text-sm underline transition-colors duration-300 ${
