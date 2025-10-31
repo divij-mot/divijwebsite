@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { Sidebar } from './components/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -16,9 +16,18 @@ import Share from './pages/Share';
 import FileConverter from './pages/FileConverter';
 import QuantumPage from './pages/QuantumPage';
 import InfinitePage from './pages/InfinitePage';
+import { MinimalLanding } from './pages/MinimalLanding';
+import { Writings } from './pages/Writings';
+import { SmoothTransition } from './components/SmoothTransition';
 
 
-function Layout({ children, isFullScreen = false }: { children: React.ReactNode; isFullScreen?: boolean }) {
+interface LayoutProps {
+  children: React.ReactNode;
+  isFullScreen?: boolean;
+  onReturnToMinimal?: () => void;
+}
+
+function Layout({ children, isFullScreen = false, onReturnToMinimal }: LayoutProps) {
   const { theme } = useTheme();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -27,7 +36,7 @@ function Layout({ children, isFullScreen = false }: { children: React.ReactNode;
   return (
     <div className={theme}>
       <div className="min-h-screen bg-white dark:bg-neutral-900 text-black dark:text-white transition-colors duration-300">
-        <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+        <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} onReturnToMinimal={onReturnToMinimal} />
         <MouseLight />
         {!isFullScreen && <ThemeToggle />}
         <div className="md:ml-64 lg:ml-72 relative">
@@ -77,24 +86,98 @@ function Home() {
   );
 }
 
+function AppRouter() {
+  const [showFancySite, setShowFancySite] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionDirection, setTransitionDirection] = useState<'to-fancy' | 'to-minimal'>('to-fancy');
+  const [fromColor, setFromColor] = useState('#FFFFFF');
+  const location = useLocation();
+
+  const handleEnterSite = (isDark: boolean) => {
+    // Set the starting color based on current theme
+    setFromColor(isDark ? '#2d2d2d' : '#EEE5D5');
+    setTransitionDirection('to-fancy');
+    setIsTransitioning(true);
+  };
+
+  const handleReturnToMinimal = () => {
+    // Always return to light mode minimal site
+    setFromColor('#EEE5D5');
+    setTransitionDirection('to-minimal');
+    setIsTransitioning(true);
+  };
+
+  const handleTransitionComplete = () => {
+    if (transitionDirection === 'to-fancy') {
+      setShowFancySite(true);
+    } else {
+      setShowFancySite(false);
+    }
+    setIsTransitioning(false);
+  };
+
+  // Show writings page without transition
+  if (location.pathname === '/writings') {
+    return <Writings />;
+  }
+
+  const minimalSite = <MinimalLanding onEnter={handleEnterSite} />;
+  const fancySite = (
+    <Routes>
+      <Route path="/" element={<Layout onReturnToMinimal={handleReturnToMinimal}><Home /></Layout>} />
+      <Route path="/about" element={<Layout onReturnToMinimal={handleReturnToMinimal}><About /></Layout>} />
+      <Route path="/portfolio" element={<Layout onReturnToMinimal={handleReturnToMinimal}><Portfolio /></Layout>} />
+      <Route path="/blog" element={<Layout onReturnToMinimal={handleReturnToMinimal}><Blog /></Layout>} />
+      <Route path="/contact" element={<Layout onReturnToMinimal={handleReturnToMinimal}><Contact /></Layout>} />
+      <Route path="/tools/word-counter" element={<Layout onReturnToMinimal={handleReturnToMinimal}><WordCounter /></Layout>} />
+      <Route path="/tools/editor" element={<Layout onReturnToMinimal={handleReturnToMinimal}><TextEditor /></Layout>} />
+      <Route path="/tools/share" element={<Layout onReturnToMinimal={handleReturnToMinimal}><Share /></Layout>} />
+      <Route path="/tools/file-converter" element={<Layout onReturnToMinimal={handleReturnToMinimal}><FileConverter /></Layout>} />
+      <Route path="/tools/quantumpage" element={<Layout onReturnToMinimal={handleReturnToMinimal}><QuantumPage /></Layout>} />
+      <Route path="/quantumpage/:uuid" element={<InfinitePage />} />
+      <Route path="*" element={<InfinitePage />} />
+    </Routes>
+  );
+
+  // Render both sites, control visibility with opacity
+  return (
+    <div className="relative">
+      {/* Minimal site */}
+      <div 
+        className={`${!showFancySite && !isTransitioning ? 'relative z-10' : 'absolute inset-0 z-0'} transition-opacity duration-700 ${
+          !showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {minimalSite}
+      </div>
+
+      {/* Fancy site */}
+      <div 
+        className={`${showFancySite && !isTransitioning ? 'relative z-10' : 'absolute inset-0 z-0'} transition-opacity duration-700 ${
+          showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {fancySite}
+      </div>
+
+      {/* Transition overlay */}
+      {isTransitioning && (
+        <SmoothTransition 
+          onComplete={handleTransitionComplete} 
+          duration={700}
+          fromColor={transitionDirection === 'to-fancy' ? fromColor : '#171717'}
+          toColor={transitionDirection === 'to-fancy' ? '#171717' : fromColor}
+        />
+      )}
+    </div>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout><Home /></Layout>} />
-          <Route path="/about" element={<Layout><About /></Layout>} />
-          <Route path="/portfolio" element={<Layout><Portfolio /></Layout>} />
-          <Route path="/blog" element={<Layout><Blog /></Layout>} />
-          <Route path="/contact" element={<Layout><Contact /></Layout>} />
-          <Route path="/tools/word-counter" element={<Layout><WordCounter /></Layout>} />
-          <Route path="/tools/editor" element={<Layout><TextEditor /></Layout>} />
-          <Route path="/tools/share" element={<Layout><Share /></Layout>} />
-          <Route path="/tools/file-converter" element={<Layout><FileConverter /></Layout>} />
-          <Route path="/tools/quantumpage" element={<Layout><QuantumPage /></Layout>} />
-          <Route path="/quantumpage/:uuid" element={<InfinitePage />} />
-          <Route path="*" element={<InfinitePage />} />
-        </Routes>
+        <AppRouter />
       </BrowserRouter>
     </ThemeProvider>
   );

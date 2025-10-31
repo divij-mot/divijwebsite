@@ -38,9 +38,10 @@ const tools: Tool[] = [
 interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
+  onReturnToMinimal?: () => void;
 }
 
-export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
+export function Sidebar({ isOpen, toggleSidebar, onReturnToMinimal }: SidebarProps) {
   return (
     <>
       {isOpen && (
@@ -59,7 +60,18 @@ export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
         <div className="flex-grow overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-8">
-                <span className="font-sans text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">Divij Motwani</span>
+                <button 
+                  onClick={() => {
+                    if (onReturnToMinimal) {
+                      onReturnToMinimal();
+                    } else {
+                      window.location.href = '/';
+                    }
+                  }}
+                  className="font-sans text-lg font-semibold tracking-tight text-neutral-900 dark:text-white hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer"
+                >
+                  Divij Motwani
+                </button>
             </div>
             
             <div className="space-y-6">

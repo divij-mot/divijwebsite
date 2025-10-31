@@ -20,6 +20,8 @@
     "@ffmpeg/core-mt": "^0.12.5",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@react-three/fiber": "^9.4.0",
+    "@react-three/postprocessing": "^3.0.4",
     "@types/fabric": "^5.3.10",
     "@types/simple-peer": "^9.11.8",
     "@uiw/codemirror-theme-github": "^4.23.10",
@@ -28,10 +30,12 @@
     "fabric": "^6.6.4",
     "heic2any": "^0.0.4",
     "lucide-react": "^0.344.0",
+    "postprocessing": "^6.37.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3",
     "simple-peer": "^9.11.1",
+    "three": "^0.180.0",
     "utif": "^3.1.0"
   },
   "devDependencies": {
