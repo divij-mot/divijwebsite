@@ -107,11 +107,11 @@ Now, generate the HTML for the path: "${path}"`;
       headers: {
         'Authorization': `Bearer ${openrouterApiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000',
+        'HTTP-Referer': process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.NODE_ENV === 'production' ? 'https://www.divij.vc' : 'http://localhost:3000',
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4.5', // Using a reliable model
+        model: 'google/gemini-3-pro-preview', // Using a reliable model
         messages: [
           {
             role: 'user',
