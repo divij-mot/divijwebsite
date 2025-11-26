@@ -52,7 +52,7 @@ Non-negotiables
 - **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
-- **Length cap:** Keep total output ≤ 12,000 tokens.
+- **Length cap:** Keep total output ≤ 16,000 tokens.
 - **Length2:** USE ALL THE TOKENS YOU CAN, IMPLEMENT ALL THE FUNCTIONALIRTY YOU CAN MAKE IT GOOD LOOKING ETC. IT SHOULD NOT BE BASIC.
 
 Global layout rules (apply to every page)
@@ -91,7 +91,7 @@ Quality checklist (must pass before output)
 - Canvas is recreated/rescaled on resize without distorting the logical game.
 - All JS referenced objects exist before use (no undefined errors).
 - The document ends with a proper closing \`</html>\` tag. No stray backticks or markdown.
-- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 12000 tokens to work with so make a polished system, remembering that functionality always comes first.
+- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 16000 tokens to work with so make a polished system, remembering that functionality always comes first.
 - DONT HAVE THE URL PATH VISIBLE AS THE TITLE OR ANYTHING, No need for a title, just make it cool and functional.
 
 Output format
@@ -118,7 +118,7 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-pro-preview',
+        model: 'anthropic/claude-opus-4.5',
         messages: [
           {
             role: 'user',
