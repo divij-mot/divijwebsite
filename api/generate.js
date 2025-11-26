@@ -1,32 +1,39 @@
+// Use Node.js runtime with maxDuration for 300s on Hobby tier
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
+  maxDuration: 300, // 5 minutes - available on Hobby/Free tier with Node.js runtime
 };
 
-export default async function handler(request) {
-  console.log('Function invoked, method:', request.method);
+export default async function handler(req, res) {
+  console.log('Function invoked, method:', req.method);
   
-  if (request.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405 });
+  if (req.method !== 'GET') {
+    return res.status(405).send('Method not allowed');
   }
 
+  // Set headers for streaming response
+  res.setHeader('Content-Type', 'text/html');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Transfer-Encoding', 'chunked');
+
   try {
-    const url = new URL(request.url);
+    const url = new URL(req.url, `http://${req.headers.host}`);
     const path = url.searchParams.get('path') || '/unknown';
     console.log('Path parameter:', path);
-    
-    // Quick test mode - uncomment to test function is working
-    // return new Response(`<html><body><h1>Function working! Path: ${path}</h1></body></html>`, {
-    //   headers: { 'Content-Type': 'text/html' }
-    // });
     
     const openrouterApiKey = process.env.OPENROUTER_API_KEY;
     
     if (!openrouterApiKey) {
       console.error('OpenRouter API key not found');
-      return new Response('Server configuration error: API key not found', { status: 500 });
+      return res.status(500).send('Server configuration error: API key not found');
     }
     
     console.log('API key found, length:', openrouterApiKey.length);
+
+    // Send initial data immediately to establish streaming connection
+    res.write('<!-- QuantumPage generation started... -->\n');
 
     const prompt = `You are an AI that generates complete, single-file, self-contained HTML web pages on the fly. The user has navigated to the URL path: "${path}".
 
@@ -111,17 +118,16 @@ Now, generate the HTML for the path: "${path}"`;
         'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-pro-preview', // Using a reliable model
+        model: 'google/gemini-3-pro-preview',
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 20000, // Increased for complex games/interactive content
+        max_tokens: 20000,
         temperature: 0.5,
-        stream: true, // Enable streaming to prevent timeout
-        
+        stream: true,
       }),
     });
     
@@ -130,308 +136,187 @@ Now, generate the HTML for the path: "${path}"`;
     if (!response.ok) {
       const errorData = await response.text();
       console.error('OpenRouter API error:', response.status, errorData);
-      return new Response('Failed to generate content', { status: 500 });
+      res.write('<!-- Error: Failed to generate content -->');
+      return res.end();
     }
 
-    console.log('Processing streaming response and keeping connection alive...');
+    console.log('Processing streaming response...');
+
+    let fullContent = '';
+    let chunkCount = 0;
+    let buffer = '';
     
-    // Create a stream that sends progress updates but only returns final HTML
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) {
-          controller.error(new Error('No response body'));
-          return;
-        }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-        let fullContent = '';
-        let chunkCount = 0;
-        let buffer = ''; // Buffer to accumulate partial chunks
-        const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        
+        // Process complete lines from buffer
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-            const chunk = decoder.decode(value, { stream: true });
-            buffer += chunk; // Add to buffer
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              console.log('Received [DONE] signal');
+              continue;
+            }
             
-            // Process complete lines from buffer
-            const lines = buffer.split('\n');
-            // Keep the last incomplete line in buffer
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim();
-                if (data === '[DONE]') {
-                  console.log('Received [DONE] signal');
-                  continue;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+                chunkCount++;
+                
+                if (chunkCount <= 5) {
+                  console.log('Content chunk:', content.substring(0, 50) + '...');
                 }
                 
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content;
-                  if (content) {
-                    fullContent += content;
-                    chunkCount++;
-                    
-                    if (chunkCount <= 5) {
-                      console.log('Content chunk:', content.substring(0, 50) + '...');
-                    }
-                    
-                    // Send periodic progress updates to keep connection alive
-                    // But don't send the actual HTML content yet
-                    if (chunkCount % 20 === 0) {
-                      console.log(`Progress update: ${chunkCount} chunks`);
-                      const progressMsg = `<!-- Progress: ${chunkCount} chunks received -->`;
-                      controller.enqueue(new TextEncoder().encode(progressMsg));
-                    }
-                  }
-                } catch (e) {
-                  console.log('Failed to parse JSON line:', data.substring(0, 100) + '...');
+                // Send periodic progress updates to keep connection alive
+                if (chunkCount % 50 === 0) {
+                  console.log(`Progress update: ${chunkCount} chunks`);
+                  res.write(`<!-- Progress: ${chunkCount} chunks received -->\n`);
                 }
               }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
             }
           }
-          
-          console.log('Stream ended. Total chunks:', chunkCount, 'Content length:', fullContent.length);
-
-          // Now send the complete HTML content all at once
-          if (fullContent.trim()) {
-            console.log('Sending complete HTML, length:', fullContent.length);
-            
-            // Check if content was truncated (doesn't end with </html>)
-            const trimmedContent = fullContent.trim();
-            if (!trimmedContent.endsWith('</html>')) {
-              console.log('Content appears truncated, attempting to complete it');
-              
-              // Try to close any open tags gracefully
-              let fixedContent = trimmedContent;
-              
-              // If it ends mid-tag or mid-function, add basic closure
-              if (!fixedContent.includes('</script>') && fixedContent.includes('<script')) {
-                fixedContent += '\n</script>';
-              }
-              if (!fixedContent.includes('</body>') && fixedContent.includes('<body')) {
-                fixedContent += '\n</body>';
-              }
-              if (!fixedContent.endsWith('</html>')) {
-                fixedContent += '\n</html>';
-              }
-              
-              // Inject home button and share button before closing body tag
-              const homeButton = `
-<div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
-    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-  </svg>
-</div>
-<div id="quantum-share-btn" style="position: fixed; top: 20px; right: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="shareCurrentPage()">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
-    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.50-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-  </svg>
-</div>
-<script>
-async function shareCurrentPage() {
-  try {
-    const content = document.documentElement.outerHTML;
-    const title = document.title || 'QuantumPage';
-    
-    const response = await fetch('/api/save-page-blob', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content, title })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      const fullUrl = window.location.origin + data.link;
-      
-      // Always copy to clipboard, no web share API
-      await navigator.clipboard.writeText(fullUrl);
-      
-      // Show a nice notification
-      showShareNotification('Permanent link copied!');
-    } else {
-      showShareNotification('Failed to create permanent link', true);
-    }
-  } catch (error) {
-    console.error('Share error:', error);
-    showShareNotification('Failed to share page', true);
-  }
-}
-
-function showShareNotification(message, isError = false) {
-  // Remove existing notification if any
-  const existing = document.getElementById('quantum-share-notification');
-  if (existing) existing.remove();
-  
-  // Create notification
-  const notification = document.createElement('div');
-  notification.id = 'quantum-share-notification';
-  notification.style.cssText = \`
-    position: fixed;
-    top: 70px;
-    right: 20px;
-    background: \${isError ? 'rgba(220, 38, 38, 0.95)' : 'rgba(34, 197, 94, 0.95)'};
-    color: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 10000;
-    backdrop-filter: blur(10px);
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  \`;
-  notification.textContent = message;
-  
-  document.body.appendChild(notification);
-  
-  // Animate in
-  setTimeout(() => {
-    notification.style.transform = 'translateX(0)';
-  }, 10);
-  
-  // Animate out and remove
-  setTimeout(() => {
-    notification.style.transform = 'translateX(100%)';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
-}
-</script>`;
-              
-              fixedContent = fixedContent.replace('</body>', homeButton + '\n</body>');
-              
-              controller.enqueue(new TextEncoder().encode(fixedContent));
-            } else {
-              // Content looks complete - still inject home button and share button
-              const homeButton = `
-<div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
-    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-  </svg>
-</div>
-<div id="quantum-share-btn" style="position: fixed; top: 20px; right: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="shareCurrentPage()">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
-    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.50-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-  </svg>
-</div>
-<script>
-async function shareCurrentPage() {
-  try {
-    const content = document.documentElement.outerHTML;
-    const title = document.title || 'QuantumPage';
-    
-    const response = await fetch('/api/save-page-blob', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content, title })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      const fullUrl = window.location.origin + data.link;
-      
-      // Always copy to clipboard, no web share API
-      await navigator.clipboard.writeText(fullUrl);
-      
-      // Show a nice notification
-      showShareNotification('Permanent link copied!');
-    } else {
-      showShareNotification('Failed to create permanent link', true);
-    }
-  } catch (error) {
-    console.error('Share error:', error);
-    showShareNotification('Failed to share page', true);
-  }
-}
-
-function showShareNotification(message, isError = false) {
-  // Remove existing notification if any
-  const existing = document.getElementById('quantum-share-notification');
-  if (existing) existing.remove();
-  
-  // Create notification
-  const notification = document.createElement('div');
-  notification.id = 'quantum-share-notification';
-  notification.style.cssText = \`
-    position: fixed;
-    top: 70px;
-    right: 20px;
-    background: \${isError ? 'rgba(220, 38, 38, 0.95)' : 'rgba(34, 197, 94, 0.95)'};
-    color: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 10000;
-    backdrop-filter: blur(10px);
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  \`;
-  notification.textContent = message;
-  
-  document.body.appendChild(notification);
-  
-  // Animate in
-  setTimeout(() => {
-    notification.style.transform = 'translateX(0)';
-  }, 10);
-  
-  // Animate out and remove
-  setTimeout(() => {
-    notification.style.transform = 'translateX(100%)';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
-}
-</script>`;
-              
-              const contentWithHomeBtn = fullContent.replace('</body>', homeButton + '\n</body>');
-              controller.enqueue(new TextEncoder().encode(contentWithHomeBtn));
-            }
-          } else {
-            controller.error(new Error('No content generated'));
-          }
-
-        } catch (error) {
-          controller.error(error);
-        } finally {
-          reader.releaseLock();
-          controller.close();
         }
       }
-    });
+      
+      console.log('Stream ended. Total chunks:', chunkCount, 'Content length:', fullContent.length);
 
-    return new Response(stream, {
+      // Send the complete HTML content
+      if (fullContent.trim()) {
+        console.log('Sending complete HTML, length:', fullContent.length);
+        
+        // Check if content was truncated (doesn't end with </html>)
+        let finalContent = fullContent.trim();
+        
+        if (!finalContent.endsWith('</html>')) {
+          console.log('Content appears truncated, attempting to complete it');
+          
+          // Try to close any open tags gracefully
+          if (!finalContent.includes('</script>') && finalContent.includes('<script')) {
+            finalContent += '\n</script>';
+          }
+          if (!finalContent.includes('</body>') && finalContent.includes('<body')) {
+            finalContent += '\n</body>';
+          }
+          if (!finalContent.endsWith('</html>')) {
+            finalContent += '\n</html>';
+          }
+        }
+        
+        // Inject home button and share button before closing body tag
+        const homeButton = `
+<div id="quantum-home-btn" style="position: fixed; top: 20px; left: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="window.location.href='/tools/quantumpage'">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+  </svg>
+</div>
+<div id="quantum-share-btn" style="position: fixed; top: 20px; right: 20px; z-index: 9999; opacity: 1.25; transition: opacity 0.3s ease; cursor: pointer; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);" onmouseover="this.style.opacity='2.0'" onmouseout="this.style.opacity='1.25'" ontouchstart="this.style.opacity='2.0'" ontouchend="setTimeout(()=>this.style.opacity='1.25',2000)" onclick="shareCurrentPage()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="pointer-events: none;">
+    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.50-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+  </svg>
+</div>
+<script>
+async function shareCurrentPage() {
+  try {
+    const content = document.documentElement.outerHTML;
+    const title = document.title || 'QuantumPage';
+    
+    const response = await fetch('/api/save-page-blob', {
+      method: 'POST',
       headers: {
-        'Content-Type': 'text/html',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ content, title })
     });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const fullUrl = window.location.origin + data.link;
+      
+      await navigator.clipboard.writeText(fullUrl);
+      showShareNotification('Permanent link copied!');
+    } else {
+      showShareNotification('Failed to create permanent link', true);
+    }
+  } catch (error) {
+    console.error('Share error:', error);
+    showShareNotification('Failed to share page', true);
+  }
+}
+
+function showShareNotification(message, isError = false) {
+  const existing = document.getElementById('quantum-share-notification');
+  if (existing) existing.remove();
+  
+  const notification = document.createElement('div');
+  notification.id = 'quantum-share-notification';
+  notification.style.cssText = \`
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    background: \${isError ? 'rgba(220, 38, 38, 0.95)' : 'rgba(34, 197, 94, 0.95)'};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    backdrop-filter: blur(10px);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  \`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+  
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+</script>`;
+        
+        finalContent = finalContent.replace('</body>', homeButton + '\n</body>');
+        res.write(finalContent);
+      } else {
+        res.write('<html><body><h1>Error: No content generated</h1></body></html>');
+      }
+
+    } catch (streamError) {
+      console.error('Stream processing error:', streamError);
+      res.write(`<!-- Error processing stream: ${streamError.message} -->`);
+    } finally {
+      reader.releaseLock();
+    }
+
+    res.end();
 
   } catch (error) {
     console.error('Error in generate function:', error);
-    
-    
-    return new Response('Internal server error', { status: 500 });
+    res.write(`<html><body><h1>Error</h1><p>${error.message}</p></body></html>`);
+    res.end();
   }
 }
