@@ -3,7 +3,7 @@ import heic2any from 'heic2any';
 import * as UTIF from 'utif';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
-import { CheckCircle, XCircle, Download, Loader2, FileWarning, AlertCircle, X, Settings2, ChevronDown } from 'lucide-react';
+import { CheckCircle, XCircle, Download, Loader2, FileWarning, AlertCircle, X, Settings2, ChevronDown, Eye } from 'lucide-react';
 
 // ── Format definitions ──────────────────────────────────────────────────────
 
@@ -880,14 +880,27 @@ const FileConverter: React.FC = () => {
                           <span title="Converting..."><Loader2 className="w-4 h-4 animate-spin text-blue-500" /></span>
                         )}
                         {fs.status === 'done' && fs.resultUrl && (
-                          <a
-                            href={fs.resultUrl}
-                            download={fs.outputFilename || `converted_${fs.file.name}`}
-                            className="p-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 rounded hover:bg-green-100 dark:hover:bg-green-800 transition-colors"
-                            title={`Download ${fs.outputFilename}`}
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
+                          <>
+                            {fs.outputFormat && ['image', 'video', 'audio'].includes(FORMAT_DB[fs.outputFormat]?.category || '') && (
+                              <a
+                                href={fs.resultUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 rounded hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
+                                title="Preview in new tab"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </a>
+                            )}
+                            <a
+                              href={fs.resultUrl}
+                              download={fs.outputFilename || `converted_${fs.file.name}`}
+                              className="p-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 rounded hover:bg-green-100 dark:hover:bg-green-800 transition-colors"
+                              title={`Download ${fs.outputFilename}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </>
                         )}
                         {fs.status === 'error' && (
                           <span title={fs.error || 'Conversion failed'}><XCircle className="w-4 h-4 text-red-500" /></span>
