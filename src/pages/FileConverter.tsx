@@ -146,53 +146,49 @@ const FileConverter: React.FC = () => {
 
   useEffect(() => { filesToProcessRef.current = filesToProcess; }, [filesToProcess]);
 
-  // ── Load FFmpeg (multi-threaded core) ───────────────────────────────────
+  // ── Load FFmpeg (multi-threaded if possible, single-threaded fallback) ──
   useEffect(() => {
     const loadFFmpeg = async () => {
-      const ffmpeg = ffmpegRef.current;
-      if (ffmpegLoadingStarted.current || ffmpeg.loaded) {
-        if (ffmpeg.loaded && !ffmpegLoaded) setFfmpegLoaded(true);
-        return;
-      }
+      if (ffmpegLoadingStarted.current) return;
       ffmpegLoadingStarted.current = true;
 
-      try {
-        setOverallError("Loading FFmpeg component...");
+      setOverallError("Loading FFmpeg component...");
 
-        // Use multi-threaded core for better performance
-        const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/esm';
-        const coreURL = `${baseURL}/ffmpeg-core.js`;
-        const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
-        const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
+      const canUseThreads = typeof SharedArrayBuffer !== 'undefined';
 
-        ffmpeg.on('log', ({ message }) => {
-          // Parse progress from FFmpeg log output
-          const timeMatch = message.match(/time=(\d+):(\d+):(\d+.\d+)/);
-          if (timeMatch) {
-            // Could parse duration for progress, but FFmpeg WASM doesn't always report it
-          }
-        });
-
-        await ffmpeg.load({ coreURL, wasmURL, workerURL });
-        setFfmpegLoaded(true);
-        setOverallError(null);
-      } catch (loadError) {
-        console.error("FFmpeg loading failed:", loadError);
-        // Fallback to single-threaded
+      if (canUseThreads) {
+        // Try multi-threaded core first — files hosted locally to avoid CORS/worker issues
         try {
-          const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-          await ffmpegRef.current.load({
-            coreURL: `${baseURL}/ffmpeg-core.js`,
-            wasmURL: `${baseURL}/ffmpeg-core.wasm`,
-            workerURL: `${baseURL}/ffmpeg-core.worker.js`,
+          const ffmpeg = ffmpegRef.current;
+          await ffmpeg.load({
+            coreURL: '/ffmpeg-mt/ffmpeg-core.js',
+            wasmURL: '/ffmpeg-mt/ffmpeg-core.wasm',
+            workerURL: '/ffmpeg-mt/ffmpeg-core.worker.js',
           });
+          console.log("FFmpeg loaded (multi-threaded)");
           setFfmpegLoaded(true);
           setOverallError(null);
-        } catch (fallbackError) {
-          const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-          setOverallError(`FFmpeg load failed: ${errorMessage}. Video/audio conversion disabled.`);
-          setFfmpegLoaded(false);
+          return;
+        } catch (e) {
+          console.warn("Multi-threaded FFmpeg failed, trying single-threaded:", e);
         }
+      }
+
+      // Single-threaded fallback — fresh instance since the previous may be tainted
+      try {
+        const ffmpeg = new FFmpeg();
+        ffmpegRef.current = ffmpeg;
+        await ffmpeg.load({
+          coreURL: '/ffmpeg-st/ffmpeg-core.js',
+          wasmURL: '/ffmpeg-st/ffmpeg-core.wasm',
+        });
+        console.log("FFmpeg loaded (single-threaded)");
+        setFfmpegLoaded(true);
+        setOverallError(null);
+      } catch (fallbackError) {
+        const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        setOverallError(`FFmpeg load failed: ${errorMessage}. Video/audio conversion disabled.`);
+        setFfmpegLoaded(false);
       }
     };
     loadFFmpeg();
@@ -830,7 +826,30 @@ const FileConverter: React.FC = () => {
         {/* ── Right panel: file list ──────────────────────────────────── */}
         <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col">
           <div className="p-4 border border-neutral-300 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-800 flex-grow overflow-y-auto min-h-[200px]">
-            <h2 className="text-lg font-semibold mb-3">2. Files & Progress</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">2. Files & Progress</h2>
+              {filesToProcess.filter(fs => fs.status === 'done' && fs.resultUrl).length > 1 && (
+                <button
+                  onClick={() => {
+                    const doneFiles = filesToProcess.filter(fs => fs.status === 'done' && fs.resultUrl);
+                    doneFiles.forEach((fs, i) => {
+                      setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = fs.resultUrl!;
+                        a.download = fs.outputFilename || `converted_${fs.file.name}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                      }, i * 300); // stagger to avoid browser blocking
+                    });
+                  }}
+                  className="flex items-center gap-1.5 text-sm bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-3 rounded transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download All ({filesToProcess.filter(fs => fs.status === 'done' && fs.resultUrl).length})
+                </button>
+              )}
+            </div>
             {filesToProcess.length === 0 ? (
               <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">Add files using the panel on the left, drag & drop, or paste.</p>
             ) : (

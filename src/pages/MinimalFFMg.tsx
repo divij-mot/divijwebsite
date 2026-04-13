@@ -17,10 +17,9 @@ function MinimalFFmpegLoader() {
       setMessage('Minimal: Attempting to load FFmpeg (using ESM core)...');
       const ffmpeg = ffmpegRef.current;
 
-      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-      const coreURL = `${baseURL}/ffmpeg-core.js`;
-      const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
-      const workerURL = `${baseURL}/ffmpeg-core.worker.js`;
+      const coreURL = '/ffmpeg-st/ffmpeg-core.js';
+      const wasmURL = '/ffmpeg-st/ffmpeg-core.wasm';
+      const workerURL = undefined;
 
       console.log("Minimal Load: Core URL", coreURL);
       console.log("Minimal Load: Wasm URL", wasmURL);
