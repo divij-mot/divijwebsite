@@ -157,7 +157,6 @@ const FileConverter: React.FC = () => {
       const canUseThreads = typeof SharedArrayBuffer !== 'undefined';
 
       if (canUseThreads) {
-        // Try multi-threaded core first — files hosted locally to avoid CORS/worker issues
         try {
           const ffmpeg = ffmpegRef.current;
           await ffmpeg.load({
@@ -174,7 +173,7 @@ const FileConverter: React.FC = () => {
         }
       }
 
-      // Single-threaded fallback — fresh instance since the previous may be tainted
+      // Single-threaded fallback
       try {
         const ffmpeg = new FFmpeg();
         ffmpegRef.current = ffmpeg;
@@ -321,7 +320,8 @@ const FileConverter: React.FC = () => {
     fileSizeBytes: number,
   ): string[] => {
     const outputInfo = FORMAT_DB[outputFormat];
-    const cmd: string[] = ['-i', inputFilename];
+    // Cap threads at 4 — higher values hang in Chrome's WASM memory limits
+    const cmd: string[] = ['-threads', '4', '-i', inputFilename];
 
     const isAudioOutput = outputInfo?.category === 'audio';
     const isVideoOutput = outputInfo?.category === 'video' || outputFormat === 'GIF';
