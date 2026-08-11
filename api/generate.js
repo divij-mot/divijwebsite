@@ -52,8 +52,8 @@ Non-negotiables
 - **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
-- **Length cap:** Keep total output ≤ 40,000 tokens.
-- **Length2:** USE ALL THE TOKENS YOU CAN, IMPLEMENT ALL THE FUNCTIONALIRTY YOU CAN MAKE IT GOOD LOOKING ETC. IT SHOULD NOT BE BASIC.
+- **Length cap:** Keep the HTML compact and complete — target ≤ 8,000 tokens. Prefer a polished, finished page over more features. Never start something you cannot finish.
+- **Finish cleanly:** Every \`<script>\`, \`<style>\`, \`<body>\`, and \`<html>\` tag must be properly closed. Incomplete/truncated output is a hard failure.
 
 Global layout rules (apply to every page)
 1. Include \`<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\`.
@@ -91,7 +91,7 @@ Quality checklist (must pass before output)
 - Canvas is recreated/rescaled on resize without distorting the logical game.
 - All JS referenced objects exist before use (no undefined errors).
 - The document ends with a proper closing \`</html>\` tag. No stray backticks or markdown.
-- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 40000 tokens to work with so make a polished system, remembering that functionality always comes first.
+- Make it cool and functional, but stay compact — a finished small page beats a truncated ambitious one.
 - DONT HAVE THE URL PATH VISIBLE AS THE TITLE OR ANYTHING, No need for a title, just make it cool and functional.
 
 Output format
@@ -124,10 +124,10 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 40000,
+        max_tokens: 16000,
         stream: true,
         thinking: { type: 'enabled' },
-        reasoning_effort: 'high',
+        reasoning_effort: 'low',
       }),
     });
     
@@ -265,19 +265,19 @@ Now, generate the HTML for the path: "${path}"`;
           return res.end();
         }
 
-        if (!finalContent.toLowerCase().endsWith('</html>')) {
-          console.log('Content appears truncated, attempting to complete it');
-          
-          // Try to close any open tags gracefully
-          if (!finalContent.includes('</script>') && finalContent.includes('<script')) {
-            finalContent += '\n</script>';
-          }
-          if (!finalContent.includes('</body>') && finalContent.includes('<body')) {
-            finalContent += '\n</body>';
-          }
-          if (!finalContent.toLowerCase().endsWith('</html>')) {
-            finalContent += '\n</html>';
-          }
+        const scriptOpens = (finalContent.match(/<script\b/gi) || []).length;
+        const scriptCloses = (finalContent.match(/<\/script>/gi) || []).length;
+        const looksTruncated =
+          !/<\/html>\s*$/i.test(finalContent) || scriptOpens !== scriptCloses;
+
+        if (looksTruncated) {
+          // Do NOT invent closing tags — incomplete <script> makes document.write throw
+          console.error(
+            'Refusing truncated HTML. length=', finalContent.length,
+            'scripts open/close=', scriptOpens, scriptCloses
+          );
+          res.write('<html><body style="font-family:system-ui;padding:2rem"><h1>Generation truncated</h1><p>The model hit the length limit mid-page. Try again with a simpler path.</p><p><a href="/tools/quantumpage">Back to QuantumPage</a></p></body></html>');
+          return res.end();
         }
         
         // Inject home button and share button before closing body tag

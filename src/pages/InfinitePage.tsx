@@ -113,9 +113,17 @@ const InfinitePage: React.FC = () => {
         if (cancelled) return;
 
         if (/<!DOCTYPE\s+html|<html[\s>]/i.test(finalHtmlContent)) {
-          document.open();
-          document.write(finalHtmlContent);
-          document.close();
+          try {
+            document.open();
+            document.write(finalHtmlContent);
+            document.close();
+          } catch (writeErr) {
+            throw new Error(
+              writeErr instanceof Error
+                ? `Generated page was incomplete (${writeErr.message})`
+                : 'Generated page was incomplete'
+            );
+          }
           return;
         }
 
