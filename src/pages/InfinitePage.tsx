@@ -1,6 +1,84 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
+// Share one in-flight generate per path so remounts/StrictMode don't stack requests
+const inflightGenerates = new Map<string, Promise<string>>();
+
+function extractHtmlDocument(raw: string) {
+  let text = raw
+    .replace(/<!--\s*(?:QuantumPage generation started\.\.\.|Progress:.*?)-->/g, '')
+    .trim();
+
+  const fenced = text.match(/```(?:html|HTML)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    text = fenced[1].trim();
+  } else {
+    text = text
+      .replace(/^```(?:html|HTML)?\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+  }
+
+  const doctypeIdx = text.search(/<!DOCTYPE\s+html/i);
+  const htmlIdx = text.search(/<html[\s>]/i);
+  let start = -1;
+  if (doctypeIdx !== -1 && htmlIdx !== -1) start = Math.min(doctypeIdx, htmlIdx);
+  else start = Math.max(doctypeIdx, htmlIdx);
+  if (start > 0) text = text.slice(start);
+
+  const closeMatch = text.match(/<\/html>\s*/i);
+  if (closeMatch) {
+    text = text.slice(0, closeMatch.index! + closeMatch[0].length).trim();
+  }
+
+  return text.trim();
+}
+
+async function fetchGeneratedHtml(pathname: string): Promise<string> {
+  const existing = inflightGenerates.get(pathname);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const response = await fetch(`/api/generate?path=${encodeURIComponent(pathname)}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    let accumulator = '';
+    const decoder = new TextDecoder();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulator += decoder.decode(value, { stream: true });
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const html = extractHtmlDocument(accumulator);
+    if (!html) {
+      throw new Error('No valid HTML content received');
+    }
+    return html;
+  })();
+
+  inflightGenerates.set(pathname, promise);
+  promise.finally(() => {
+    if (inflightGenerates.get(pathname) === promise) {
+      inflightGenerates.delete(pathname);
+    }
+  });
+
+  return promise;
+}
+
 const InfinitePage: React.FC = () => {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -9,94 +87,57 @@ const InfinitePage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadPage = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
-        let response;
-        
-        // Check if this is a UUID-based permanent link
         if (uuid) {
-          // Load saved content by UUID
-          response = await fetch(`/api/get-page-blob?uuid=${encodeURIComponent(uuid)}`);
-          
+          const response = await fetch(`/api/get-page-blob?uuid=${encodeURIComponent(uuid)}`);
           if (!response.ok) {
             throw new Error('Saved page not found or expired');
           }
-          
+
           const htmlContent = await response.text();
-          
-          // Replace the entire document for saved pages
+          if (cancelled) return;
+
           document.open();
           document.write(htmlContent);
           document.close();
           return;
-        } else {
-          // Generate new content for regular paths
-          response = await fetch(`/api/generate?path=${encodeURIComponent(location.pathname)}`);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          // Handle the mixed stream - filter out progress comments and get final HTML
-          const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error('No response body');
-          }
-
-          let accumulator = '';
-          const decoder = new TextDecoder();
-          let finalHtmlContent = '';
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              
-              const chunk = decoder.decode(value, { stream: true });
-              accumulator += chunk;
-            }
-            
-            // Extract the actual HTML content (everything after the last progress comment)
-            const progressCommentRegex = /<!--\s*Progress:.*?-->/g;
-            const cleanContent = accumulator.replace(progressCommentRegex, '').trim();
-            
-            // The final HTML should be the last substantial content
-            if (cleanContent) {
-              finalHtmlContent = cleanContent;
-            } else {
-              throw new Error('No valid HTML content received');
-            }
-            
-          } finally {
-            reader.releaseLock();
-          }
-          
-          // If it's a complete HTML document, replace the entire page
-          if (finalHtmlContent.includes('<!DOCTYPE html') || finalHtmlContent.includes('<html')) {
-            // Replace the entire document
-            document.open();
-            document.write(finalHtmlContent);
-            document.close();
-            return; // Don't continue with React rendering
-          } else {
-            // If it's just HTML content, use it with dangerouslySetInnerHTML
-            setContent(finalHtmlContent);
-          }
         }
+
+        const finalHtmlContent = await fetchGeneratedHtml(location.pathname);
+        if (cancelled) return;
+
+        if (/<!DOCTYPE\s+html|<html[\s>]/i.test(finalHtmlContent)) {
+          document.open();
+          document.write(finalHtmlContent);
+          document.close();
+          return;
+        }
+
+        setContent(finalHtmlContent);
       } catch (err) {
+        if (cancelled) return;
         console.error('Error loading page:', err);
         setError(err instanceof Error ? err.message : 'Failed to load page');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     if (location.pathname !== '/' || uuid) {
       loadPage();
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [location.pathname, uuid]);
 
   if (loading) {
@@ -127,7 +168,7 @@ const InfinitePage: React.FC = () => {
           <p className="text-neutral-600 dark:text-neutral-400 mb-4">
             Failed to generate the page: {error}
           </p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
@@ -139,7 +180,7 @@ const InfinitePage: React.FC = () => {
   }
 
   return (
-    <div 
+    <div
       className="infinite-page-content"
       dangerouslySetInnerHTML={{ __html: content }}
     />

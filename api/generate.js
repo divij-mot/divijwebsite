@@ -23,14 +23,14 @@ export default async function handler(req, res) {
     const path = url.searchParams.get('path') || '/unknown';
     console.log('Path parameter:', path);
     
-    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
     
-    if (!openrouterApiKey) {
-      console.error('OpenRouter API key not found');
+    if (!deepseekApiKey) {
+      console.error('DeepSeek API key not found');
       return res.status(500).send('Server configuration error: API key not found');
     }
     
-    console.log('API key found, length:', openrouterApiKey.length);
+    console.log('API key found, length:', deepseekApiKey.length);
 
     // Send initial data immediately to establish streaming connection
     res.write('<!-- QuantumPage generation started... -->\n');
@@ -52,7 +52,7 @@ Non-negotiables
 - **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
-- **Length cap:** Keep total output ≤ 16,000 tokens.
+- **Length cap:** Keep total output ≤ 40,000 tokens.
 - **Length2:** USE ALL THE TOKENS YOU CAN, IMPLEMENT ALL THE FUNCTIONALIRTY YOU CAN MAKE IT GOOD LOOKING ETC. IT SHOULD NOT BE BASIC.
 
 Global layout rules (apply to every page)
@@ -91,11 +91,12 @@ Quality checklist (must pass before output)
 - Canvas is recreated/rescaled on resize without distorting the logical game.
 - All JS referenced objects exist before use (no undefined errors).
 - The document ends with a proper closing \`</html>\` tag. No stray backticks or markdown.
-- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 16000 tokens to work with so make a polished system, remembering that functionality always comes first.
+- Make all sites cool, try not to make basic games or websites, add functionality make it in depth, you have 40000 tokens to work with so make a polished system, remembering that functionality always comes first.
 - DONT HAVE THE URL PATH VISIBLE AS THE TITLE OR ANYTHING, No need for a title, just make it cool and functional.
 
 Output format
-- **IMPORTANT:** Your entire response must be the raw HTML only. Do not wrap it in Markdown fences. Do not add commentary, explanations, or extra text outside the HTML.
+- **IMPORTANT:** Your entire response must be the raw HTML only. Do NOT wrap it in Markdown fences (no \`\`\`html, no \`\`\`). Do not add commentary, explanations, or extra text outside the HTML.
+- Start with \`<!DOCTYPE html>\` as the very first characters of your answer content. End with \`</html>\`.
 - The page must contain inline \`<style>\` and \`<script>\` sections implementing the above, with sensible defaults and comments kept brief.
 
 Examples of path handling (you decide final design; these are guides, not templates)
@@ -107,35 +108,34 @@ Remember: if space is constrained, **scale down and reflow**; never cut off comp
 
 Now, generate the HTML for the path: "${path}"`;
 
-    console.log('Making request to OpenRouter...');
+    console.log('Making request to DeepSeek...');
     
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openrouterApiKey}`,
+        'Authorization': `Bearer ${deepseekApiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.NODE_ENV === 'production' ? 'https://www.divij.vc' : 'http://localhost:3000',
-        'X-Title': 'QuantumPage Generator',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'deepseek-v4-flash',
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 20000,
-        temperature: 0.5,
+        max_tokens: 40000,
         stream: true,
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
       }),
     });
     
-    console.log('OpenRouter response status:', response.status);
+    console.log('DeepSeek response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenRouter API error:', response.status, errorData);
+      console.error('DeepSeek API error:', response.status, errorData);
       res.write('<!-- Error: Failed to generate content -->');
       return res.end();
     }
@@ -143,11 +143,56 @@ Now, generate the HTML for the path: "${path}"`;
     console.log('Processing streaming response...');
 
     let fullContent = '';
-    let chunkCount = 0;
+    let contentChunks = 0;
+    let reasoningChunks = 0;
     let buffer = '';
+    let lastHeartbeat = Date.now();
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+
+    const heartbeat = (label) => {
+      const now = Date.now();
+      // Keep the SAME open response alive during thinking (not new HTTP/edge requests)
+      if (now - lastHeartbeat >= 15000) {
+        res.write(`<!-- Progress: ${label} -->\n`);
+        lastHeartbeat = now;
+      }
+    };
+
+    const extractHtmlDocument = (raw) => {
+      let text = (raw || '').trim();
+
+      // Prefer a complete fenced block; otherwise strip a leading/trailing fence
+      const fenced = text.match(/```(?:html|HTML)?\s*([\s\S]*?)```/);
+      if (fenced) {
+        text = fenced[1].trim();
+      } else {
+        text = text
+          .replace(/^```(?:html|HTML)?\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim();
+      }
+
+      // Drop any preamble (commentary / leaked prose) before the document
+      const doctypeIdx = text.search(/<!DOCTYPE\s+html/i);
+      const htmlIdx = text.search(/<html[\s>]/i);
+      let start = -1;
+      if (doctypeIdx !== -1 && htmlIdx !== -1) start = Math.min(doctypeIdx, htmlIdx);
+      else start = Math.max(doctypeIdx, htmlIdx);
+      if (start > 0) {
+        console.log('Stripping preamble before HTML, chars:', start);
+        text = text.slice(start);
+      }
+
+      // Truncate anything after the closing html tag
+      const closeMatch = text.match(/<\/html>\s*/i);
+      if (closeMatch) {
+        text = text.slice(0, closeMatch.index + closeMatch[0].length).trim();
+      }
+
+      return text.trim();
+    };
 
     try {
       while (true) {
@@ -171,20 +216,29 @@ Now, generate the HTML for the path: "${path}"`;
             
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
+              const delta = parsed.choices?.[0]?.delta || {};
+              // DeepSeek thinking arrives ONLY on reasoning_content — never merge into page HTML.
+              // Answer HTML arrives on content. Prior failure was markdown fences in content, not thinking leak.
+              const content = typeof delta.content === 'string' ? delta.content : '';
+              const reasoning = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : '';
+
+              if (reasoning) {
+                reasoningChunks++;
+                if (reasoningChunks === 1) {
+                  console.log('Thinking started (discarded, not written to page)');
+                }
+                heartbeat(`thinking ${reasoningChunks}`);
+              }
+
               if (content) {
                 fullContent += content;
-                chunkCount++;
+                contentChunks++;
                 
-                if (chunkCount <= 5) {
+                if (contentChunks <= 5) {
                   console.log('Content chunk:', content.substring(0, 50) + '...');
                 }
                 
-                // Send periodic progress updates to keep connection alive
-                if (chunkCount % 50 === 0) {
-                  console.log(`Progress update: ${chunkCount} chunks`);
-                  res.write(`<!-- Progress: ${chunkCount} chunks received -->\n`);
-                }
+                heartbeat(`content ${contentChunks}`);
               }
             } catch (e) {
               // Ignore JSON parse errors for incomplete chunks
@@ -193,16 +247,25 @@ Now, generate the HTML for the path: "${path}"`;
         }
       }
       
-      console.log('Stream ended. Total chunks:', chunkCount, 'Content length:', fullContent.length);
+      console.log(
+        'Stream ended. Content chunks:', contentChunks,
+        'Reasoning chunks:', reasoningChunks,
+        'Content length:', fullContent.length
+      );
 
       // Send the complete HTML content
       if (fullContent.trim()) {
         console.log('Sending complete HTML, length:', fullContent.length);
         
-        // Check if content was truncated (doesn't end with </html>)
-        let finalContent = fullContent.trim();
+        let finalContent = extractHtmlDocument(fullContent);
         
-        if (!finalContent.endsWith('</html>')) {
+        if (!finalContent.toLowerCase().includes('<html')) {
+          console.error('Model output did not contain an HTML document. Preview:', fullContent.substring(0, 200));
+          res.write('<html><body><h1>Error: Model did not return valid HTML</h1></body></html>');
+          return res.end();
+        }
+
+        if (!finalContent.toLowerCase().endsWith('</html>')) {
           console.log('Content appears truncated, attempting to complete it');
           
           // Try to close any open tags gracefully
@@ -212,7 +275,7 @@ Now, generate the HTML for the path: "${path}"`;
           if (!finalContent.includes('</body>') && finalContent.includes('<body')) {
             finalContent += '\n</body>';
           }
-          if (!finalContent.endsWith('</html>')) {
+          if (!finalContent.toLowerCase().endsWith('</html>')) {
             finalContent += '\n</html>';
           }
         }
