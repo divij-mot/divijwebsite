@@ -124,7 +124,7 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 16000,
+        max_tokens: 30000,
         stream: true,
         thinking: { type: 'enabled' },
         reasoning_effort: 'low',
