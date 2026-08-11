@@ -52,7 +52,7 @@ Non-negotiables
 - **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
-- **Length cap:** Keep the HTML compact and complete — target ≤ 8,000 tokens. Prefer a polished, finished page over more features. Never start something you cannot finish.
+- **Length cap:** Keep the HTML compact and complete — target ≤ 16,000 tokens. Prefer a polished, finished page over more features. Never start something you cannot finish.
 - **Finish cleanly:** Every \`<script>\`, \`<style>\`, \`<body>\`, and \`<html>\` tag must be properly closed. Incomplete/truncated output is a hard failure.
 
 Global layout rules (apply to every page)
