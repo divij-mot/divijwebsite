@@ -45,16 +45,11 @@ export const Writings: React.FC = () => {
       <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
         <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
           <div className="max-w-2xl w-full">
-        <h1 className={`text-4xl md:text-5xl font-bold mb-3 transition-colors duration-300 ${
+        <h1 className={`text-4xl md:text-5xl font-bold mb-12 transition-colors duration-300 ${
           isDark ? 'text-neutral-100' : 'text-neutral-900'
         }`}>
           Writings
         </h1>
-        <p className={`text-base italic mb-12 ${
-          isDark ? 'text-neutral-400' : 'text-neutral-600'
-        }`}>
-          Notes from work I was in the middle of.
-        </p>
 
         <WritingList variant="editorial" isDark={isDark} />
 

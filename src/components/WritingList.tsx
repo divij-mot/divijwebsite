@@ -29,8 +29,6 @@ function WritingEntry({
             }`}
           >
             {writing.date}
-            <span className="mx-2 text-neutral-400">·</span>
-            {writing.venue}
           </p>
 
           <p
@@ -80,8 +78,6 @@ function WritingEntry({
       >
         <p className="text-[0.7rem] tracking-[0.18em] uppercase text-neutral-500 mb-3">
           {writing.date}
-          <span className="mx-2">·</span>
-          {writing.venue}
         </p>
 
         <p className="text-2xl md:text-[1.7rem] font-medium leading-snug text-neutral-900 dark:text-neutral-100 mb-3">

@@ -1,7 +1,6 @@
 export type Writing = {
   id: string;
   title: string;
-  venue: string;
   date: string;
   url: string;
   description: string;
@@ -12,7 +11,6 @@ export const writings: Writing[] = [
   {
     id: 'period',
     title: 'period',
-    venue: 'comma hack 6',
     date: 'March 2026',
     url: 'https://therefore.sh/projects/period',
     description:
@@ -22,7 +20,6 @@ export const writings: Writing[] = [
   {
     id: 'dva',
     title: 'Causal Video Generation as a Policy',
-    venue: 'Beep Boop',
     date: 'March 2026',
     url: 'https://www.beepbooprobotics.com/posts/causal-video-generation',
     description:
