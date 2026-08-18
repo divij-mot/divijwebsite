@@ -9,15 +9,9 @@ function extractHtmlDocument(raw: string) {
     .replace(/<!--\s*(?:QuantumPage generation started\.\.\.|Progress:.*?)-->/g, '')
     .trim();
 
-  const fenced = text.match(/```(?:html|HTML)?\s*([\s\S]*?)```/);
-  if (fenced) {
-    text = fenced[1].trim();
-  } else {
-    text = text
-      .replace(/^```(?:html|HTML)?\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
-  }
+  // Only strip OUTER fences — never cut on the first ``` inside page JS
+  text = text.replace(/^```(?:html|HTML)?\s*\r?\n?/i, '');
+  text = text.replace(/\r?\n?```\s*$/i, '');
 
   const doctypeIdx = text.search(/<!DOCTYPE\s+html/i);
   const htmlIdx = text.search(/<html[\s>]/i);
@@ -26,9 +20,9 @@ function extractHtmlDocument(raw: string) {
   else start = Math.max(doctypeIdx, htmlIdx);
   if (start > 0) text = text.slice(start);
 
-  const closeMatch = text.match(/<\/html>\s*/i);
-  if (closeMatch) {
-    text = text.slice(0, closeMatch.index! + closeMatch[0].length).trim();
+  const closeIdx = text.toLowerCase().lastIndexOf('</html>');
+  if (closeIdx !== -1) {
+    text = text.slice(0, closeIdx + '</html>'.length).trim();
   }
 
   return text.trim();

@@ -165,18 +165,13 @@ Now, generate the HTML for the path: "${path}"`;
     const extractHtmlDocument = (raw) => {
       let text = (raw || '').trim();
 
-      // Prefer a complete fenced block; otherwise strip a leading/trailing fence
-      const fenced = text.match(/```(?:html|HTML)?\s*([\s\S]*?)```/);
-      if (fenced) {
-        text = fenced[1].trim();
-      } else {
-        text = text
-          .replace(/^```(?:html|HTML)?\s*/i, '')
-          .replace(/```\s*$/i, '')
-          .trim();
-      }
+      // Only strip an OUTER leading/trailing markdown fence.
+      // Do NOT non-greedily match through the first ``` — MD viewers and similar
+      // pages legitimately contain ``` inside <script>, which was cutting pages mid-JS.
+      text = text.replace(/^```(?:html|HTML)?\s*\r?\n?/i, '');
+      text = text.replace(/\r?\n?```\s*$/i, '');
 
-      // Drop any preamble (commentary / leaked prose) before the document
+      // Drop any preamble before the document
       const doctypeIdx = text.search(/<!DOCTYPE\s+html/i);
       const htmlIdx = text.search(/<html[\s>]/i);
       let start = -1;
@@ -187,10 +182,10 @@ Now, generate the HTML for the path: "${path}"`;
         text = text.slice(start);
       }
 
-      // Truncate anything after the closing html tag
-      const closeMatch = text.match(/<\/html>\s*/i);
-      if (closeMatch) {
-        text = text.slice(0, closeMatch.index + closeMatch[0].length).trim();
+      // Use the last </html> in case the page content mentions the tag
+      const closeIdx = text.toLowerCase().lastIndexOf('</html>');
+      if (closeIdx !== -1) {
+        text = text.slice(0, closeIdx + '</html>'.length).trim();
       }
 
       return text.trim();
