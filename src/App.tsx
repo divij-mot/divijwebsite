@@ -61,8 +61,7 @@ function Home() {
     <div className="max-w-2xl lg:max-w-4xl pt-12">
       <h1 className="text-5xl font-bold mb-6">Hi! I'm Divij</h1>
       <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-        I'm currently an 18-year old student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter.
-        This space serves as both my portfolio and a collection of useful tools I've created along the way. I hope you'll use some of them! 
+        I'm studying EECS at UC Berkeley, currently an FDE intern at Palantir. In my free time I build things I want to exist — lately that's been end-to-end robotics, and the unglamorous work of getting those models onto real cars. This space is both a portfolio and a set of tools I've made along the way.
       </p>
       <div className="h-px w-full bg-neutral-200 dark:bg-neutral-800 my-12" />
       <div className="prose prose-neutral dark:prose-invert">
@@ -71,13 +70,25 @@ function Home() {
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              In my sophomore year of high school, I founded a <a href="https://issuu.com/palyveritas" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">STEM publication</a> which covered tech innovation in the Bay Area. During my time there, we covered TechCrunch Disrupt, Amazon's Robotics Centers, Waymo, and much more. I love to read and write, and hope you'll enjoy some of <a href="/blogs" className="text-blue-500 hover:underline">my blogs</a>.
+              Won <a href="https://blog.comma.ai/comma-hack-6/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">comma.ai Hack 6</a> with <a href="https://therefore.sh/projects/period" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">period</a> — an end-to-end car parking world model with 11M parameters that runs at 120hz on a MacBook.
             </span>
           </li>
           <li className="flex items-start">
             <span className="text-neutral-400 mr-2">•</span>
             <span className="text-neutral-600 dark:text-neutral-400">
-              Some time ago, I competed at the <a href="https://www.societyforscience.org/isef/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Regeneron International Science and Engineering Fair</a>. We presented <a href="https://oralai.tech" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">OralAI</a>, a new consumer dental disease detection system, which ended up winning the First Place Grand Award within the Biomedical Engineering category. The system is now non-provisional patent pending under a pro-bono grant from <a href="https://www.procopio.com/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Procopio LLP</a>.
+              <a href="https://www.beepbooprobotics.com/posts/causal-video-generation" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Causal Video Generation as a Policy</a> — a direct video action model created to model and dream/act in the push-t environment.
+            </span>
+          </li>
+          <li className="flex items-start">
+            <span className="text-neutral-400 mr-2">•</span>
+            <span className="text-neutral-600 dark:text-neutral-400">
+              Co-authored <a href="https://papers.nips.cc/paper_files/paper/2025/hash/ed25c00ff6900989116d3ba5d607d33d-Abstract-Datasets_and_Benchmarks_Track.html" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">RAGuard</a>, a fact-checking benchmark for RAG under misleading retrievals, accepted to NeurIPS 2025.
+            </span>
+          </li>
+          <li className="flex items-start">
+            <span className="text-neutral-400 mr-2">•</span>
+            <span className="text-neutral-600 dark:text-neutral-400">
+              Built <a href="https://oralai.tech" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">OralAI</a>, a consumer dental disease detection system that won First Place Grand Award in Biomedical Engineering at <a href="https://www.societyforscience.org/isef/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">ISEF</a>. Non-provisional patent pending under a pro-bono grant from <a href="https://www.procopio.com/" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Procopio LLP</a>.
             </span>
           </li>
         </ul>

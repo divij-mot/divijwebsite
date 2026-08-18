@@ -1,16 +1,13 @@
-import React from 'react';
+import { WritingList } from '../components/WritingList';
 
 function Blog() {
   return (
-    <div className="max-w-2xl lg:max-w-4xl pt-12">
-      <h1 className="text-5xl font-bold mb-6">Blog</h1>
-      <div className="prose prose-neutral dark:prose-invert">
-
-
-        <p className="text-neutral-600 dark:text-neutral-400">
-          WIP <a href="#" className="text-blue-500 hover:underline">here</a> (link currently inactive).
-        </p>
-      </div>
+    <div className="max-w-2xl lg:max-w-3xl pt-12 pb-16">
+      <h1 className="text-5xl font-bold mb-3">Blog</h1>
+      <p className="text-neutral-600 dark:text-neutral-400 italic mb-12">
+        Notes from work I was in the middle of.
+      </p>
+      <WritingList variant="site" />
     </div>
   );
 }

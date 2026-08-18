@@ -74,3 +74,42 @@ html, body {
   animation: subtle-pulse-dark 4.5s ease-in-out infinite;
 }
 
+@keyframes writings-dot {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.writings-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.35rem;
+  margin-bottom: 0.12rem;
+  border-radius: 9999px;
+  background: rgb(185, 28, 28);
+  vertical-align: middle;
+  animation: writings-dot 2.4s ease-in-out infinite;
+}
+
+.writings-link {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .writings-dot,
+  .animate-subtle-pulse,
+  .animate-subtle-pulse-dark {
+    animation: none;
+  }
+
+  .writings-dot {
+    opacity: 1;
+  }
+}
+

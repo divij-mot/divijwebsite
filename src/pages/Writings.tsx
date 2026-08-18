@@ -4,6 +4,8 @@ import { DotsLandscape } from '../components/DotsLandscape';
 import { DotSunMoon } from '../components/DotSunMoon';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { WritingList } from '../components/WritingList';
+import { Copyright } from '../components/Copyright';
 
 export const Writings: React.FC = () => {
   const [isDark, setIsDark] = useState(false);
@@ -28,7 +30,6 @@ export const Writings: React.FC = () => {
         onClick={toggleTheme}
       />
 
-      {/* Back Button */}
       <button
         onClick={handleBack}
         className={`fixed top-6 right-6 p-3 rounded-full transition-all duration-300 z-20 ${
@@ -41,34 +42,28 @@ export const Writings: React.FC = () => {
         <ArrowLeft className="w-5 h-5" />
       </button>
 
-      {/* Main Content - Scrollable Container */}
       <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
         <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
           <div className="max-w-2xl w-full">
-        <h1 className={`text-4xl md:text-5xl font-bold mb-8 transition-colors duration-300 ${
+        <h1 className={`text-4xl md:text-5xl font-bold mb-3 transition-colors duration-300 ${
           isDark ? 'text-neutral-100' : 'text-neutral-900'
         }`}>
           Writings
         </h1>
-
-        <div className={`prose max-w-none transition-colors duration-300 ${
-          isDark ? 'prose-invert' : ''
+        <p className={`text-base italic mb-12 ${
+          isDark ? 'text-neutral-400' : 'text-neutral-600'
         }`}>
-          <p className={`text-base italic ${
-            isDark ? 'text-neutral-400' : 'text-neutral-600'
-          }`}>
-            Nothing here yet. Check back soon!
-          </p>
-        </div>
+          Notes from work I was in the middle of.
+        </p>
+
+        <WritingList variant="editorial" isDark={isDark} />
 
         <div className={`mt-12 pt-8 border-t ${
           isDark ? 'border-neutral-700' : 'border-neutral-400'
         }`}>
-          <p className={`text-xs text-center ${
+          <Copyright className={`text-xs text-center ${
             isDark ? 'text-neutral-500' : 'text-neutral-600'
-          }`}>
-            © 2025 Divij Motwani. All rights reserved.
-          </p>
+          }`} />
         </div>
           </div>
         </div>
@@ -76,4 +71,3 @@ export const Writings: React.FC = () => {
     </div>
   );
 };
-

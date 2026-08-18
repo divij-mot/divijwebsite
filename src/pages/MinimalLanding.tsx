@@ -3,6 +3,7 @@ import { SimpleDither } from '../components/SimpleDither';
 import { DotsLandscape } from '../components/DotsLandscape';
 import { DotSunMoon } from '../components/DotSunMoon';
 import { useNavigate } from 'react-router-dom';
+import { Copyright } from '../components/Copyright';
 
 interface MinimalLandingProps {
   onEnter: (isDark: boolean) => void;
@@ -15,7 +16,6 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
   const [hasClickedName, setHasClickedName] = useState(false);
   const navigate = useNavigate();
 
-  // Start pulsing after 15 seconds only if name hasn't been clicked
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!hasClickedName) {
@@ -32,10 +32,10 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
 
   const handleNameClick = () => {
     if (!hasClickedName) {
-      setHasClickedName(true); // Stop pulsing permanently (until reload)
+      setHasClickedName(true);
       setShowPulse(false);
     }
-    setSecretRevealed(!secretRevealed); // Toggle secret reveal
+    setSecretRevealed(!secretRevealed);
   };
 
   const handleWritingsClick = () => {
@@ -53,7 +53,6 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
         onClick={secretRevealed ? () => onEnter(isDark) : toggleTheme}
       />
 
-      {/* Main Content - Scrollable Container */}
       <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
         <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
           <div className="max-w-2xl w-full">
@@ -73,6 +72,17 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
         </p>
 
         <div className="flex gap-4 mb-8">
+          <button
+            onClick={handleWritingsClick}
+            className={`writings-link text-sm underline underline-offset-4 decoration-2 transition-colors duration-300 ${
+              isDark
+                ? 'text-red-500/90 hover:text-red-400 decoration-red-500/70'
+                : 'text-red-800 hover:text-red-900 decoration-red-800/70'
+            }`}
+          >
+            Writings
+            <span className="writings-dot" aria-hidden="true" />
+          </button>
           <a
             href="https://github.com/divij-mot"
             target="_blank"
@@ -97,38 +107,24 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
           >
             LinkedIn
           </a>
-          <button
-            onClick={handleWritingsClick}
-            className={`text-sm underline transition-colors duration-300 ${
-              isDark 
-                ? 'text-neutral-400 hover:text-neutral-200' 
-                : 'text-neutral-700 hover:text-neutral-900'
-            }`}
-          >
-            Writings
-          </button>
         </div>
 
-        {/* About Section */}
           <div className={`space-y-4 transition-colors duration-500 ${
           isDark ? 'text-neutral-300' : 'text-neutral-800'
         }`}>
             <p className="text-base leading-relaxed transition-colors duration-500">
-            I'm currently a student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter. 
-            In the past I've been captivated by biotech and retrieval systems. Currently I find myself fragmented between robotics, blockchain, and ...
-          </p>
-          
-          {/* Add more content items here with the same structure */}
+              I'm studying EECS at UC Berkeley, currently an FDE intern at Palantir.
+              I used to be deep in biotech and retrieval systems; these days it's robotics —
+              world models, inverse dynamics, and getting those ideas onto real cars.
+            </p>
         </div>
 
         <div className={`mt-6 pt-6 border-t ${
           isDark ? 'border-neutral-700' : 'border-neutral-400'
         }`}>
-          <p className={`text-xs text-center ${
+          <Copyright className={`text-xs text-center ${
             isDark ? 'text-neutral-500' : 'text-neutral-600'
-          }`}>
-            © 2025 Divij Motwani. All rights reserved.
-          </p>
+          }`} />
         </div>
           </div>
         </div>
@@ -136,4 +132,3 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
     </div>
   );
 };
-

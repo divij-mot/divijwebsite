@@ -108,12 +108,13 @@ export function Sidebar({ isOpen, toggleSidebar, onReturnToMinimal }: SidebarPro
               <NavLink
                 to="/blog"
                 className={({ isActive }) =>
-                  `block transition-colors hover:text-neutral-800 dark:hover:text-neutral-200 ${
+                  `flex items-center gap-2 transition-colors hover:text-neutral-800 dark:hover:text-neutral-200 ${
                     isActive ? 'text-black dark:text-white font-medium' : 'text-neutral-500'
                   }`
                 }
               >
                 Blog
+                <span className="writings-dot" aria-hidden="true" />
               </NavLink>
               <NavLink
                 to="/contact"
