@@ -52,7 +52,7 @@ Non-negotiables
 - **No truncation ever:** Nothing may render off-screen or be cut off. If space is tight, **scale down** or **reflow**, don't overflow.
 - **Functional:** Any interactive elements (games, controls, buttons) must work with complete, bug-free JavaScript.
 - **Performance:** Use modern HTML5/CSS3/ES6. Avoid heavy effects. Prioritize smooth interaction.
-- **Length cap:** Keep the HTML compact and complete — target ≤ 16,000 tokens. Prefer a polished, finished page over more features. Never start something you cannot finish.
+- **Length cap:** Keep the final HTML ≤ 16,000 tokens. Thinking/reasoning is separate and does not count toward that HTML budget in your planning — still finish the page fully. Prefer a polished, finished page over more features. Never start something you cannot finish.
 - **Finish cleanly:** Every \`<script>\`, \`<style>\`, \`<body>\`, and \`<html>\` tag must be properly closed. Incomplete/truncated output is a hard failure.
 
 Global layout rules (apply to every page)
@@ -124,7 +124,7 @@ Now, generate the HTML for the path: "${path}"`;
             content: prompt
           }
         ],
-        max_tokens: 30000,
+        max_tokens: 50000,
         stream: true,
         thinking: { type: 'enabled' },
         reasoning_effort: 'low',
@@ -147,6 +147,8 @@ Now, generate the HTML for the path: "${path}"`;
     let reasoningChunks = 0;
     let buffer = '';
     let lastHeartbeat = Date.now();
+    let finishReason = null;
+    let usage = null;
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -216,9 +218,13 @@ Now, generate the HTML for the path: "${path}"`;
             
             try {
               const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta || {};
+              if (parsed.usage) usage = parsed.usage;
+              const choice = parsed.choices?.[0] || {};
+              if (choice.finish_reason) finishReason = choice.finish_reason;
+              const delta = choice.delta || {};
               // DeepSeek thinking arrives ONLY on reasoning_content — never merge into page HTML.
               // Answer HTML arrives on content. Prior failure was markdown fences in content, not thinking leak.
+              // IMPORTANT: max_tokens is SHARED by reasoning_content + content.
               const content = typeof delta.content === 'string' ? delta.content : '';
               const reasoning = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : '';
 
@@ -250,7 +256,9 @@ Now, generate the HTML for the path: "${path}"`;
       console.log(
         'Stream ended. Content chunks:', contentChunks,
         'Reasoning chunks:', reasoningChunks,
-        'Content length:', fullContent.length
+        'Content length:', fullContent.length,
+        'finish_reason:', finishReason,
+        'usage:', usage ? JSON.stringify(usage) : null
       );
 
       // Send the complete HTML content
@@ -276,7 +284,7 @@ Now, generate the HTML for the path: "${path}"`;
             'Refusing truncated HTML. length=', finalContent.length,
             'scripts open/close=', scriptOpens, scriptCloses
           );
-          res.write('<html><body style="font-family:system-ui;padding:2rem"><h1>Generation truncated</h1><p>The model hit the length limit mid-page. Try again with a simpler path.</p><p><a href="/tools/quantumpage">Back to QuantumPage</a></p></body></html>');
+          res.write('<html><body style="font-family:system-ui;padding:2rem"><h1>Generation truncated</h1><p>The model ran out of output budget mid-page (thinking + HTML share one token limit). Try again.</p><p><a href="/tools/quantumpage">Back to QuantumPage</a></p></body></html>');
           return res.end();
         }
         
