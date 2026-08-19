@@ -113,10 +113,9 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
           isDark ? 'text-neutral-300' : 'text-neutral-800'
         }`}>
             <p className="text-base leading-relaxed transition-colors duration-500">
-              I'm studying EECS at UC Berkeley, currently an FDE intern at Palantir.
-              I used to be deep in biotech and retrieval systems; these days it's robotics —
-              world models, inverse dynamics, and getting those ideas onto real cars.
-            </p>
+            I'm currently a student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter. 
+            In the past I've been captivated by biotech and retrieval systems. Currently I find myself fragmented between robotics, blockchain, and ...
+          </p>
         </div>
 
         <div className={`mt-6 pt-6 border-t ${
