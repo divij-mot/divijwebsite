@@ -61,7 +61,8 @@ function Home() {
     <div className="max-w-2xl lg:max-w-4xl pt-12">
       <h1 className="text-5xl font-bold mb-6">Hi! I'm Divij</h1>
       <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-        I'm studying EECS at UC Berkeley, currently an FDE intern at Palantir. In my free time I build things I want to exist — lately that's been end-to-end robotics, and the unglamorous work of getting those models onto real cars. This space is both a portfolio and a set of tools I've made along the way.
+        I'm currently an 18-year old student studying EECS @ UC Berkeley. In my free time, I'm focused on building elegant solutions to whatever problems I encounter.
+        This space serves as both my portfolio and a collection of useful tools I've created along the way. I hope you'll use some of them!
       </p>
       <div className="h-px w-full bg-neutral-200 dark:bg-neutral-800 my-12" />
       <div className="prose prose-neutral dark:prose-invert">
