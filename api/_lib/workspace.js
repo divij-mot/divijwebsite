@@ -18,8 +18,21 @@ import * as store from './store.js';
 import { randomBytes, createHash } from 'node:crypto';
 
 const LEASE_TTL_SECONDS = SANDBOX_LIMITS.ttlSeconds + 600;
+
+/**
+ * Labels written onto the Mosaic sandbox at create time.
+ *
+ * These are the recovery copy of the lease, and they carry enough to rebuild it
+ * completely. That matters more than it first appears: without Redis the store is
+ * per-instance memory, and every serverless invocation gets a fresh one, so in practice
+ * the store is *always* cold and these labels are the only source of truth.
+ */
 const LABEL_WORKSPACE = 'builder_workspace';
 const LABEL_SESSION = 'builder_session';
+const LABEL_EXPIRES = 'builder_expires';
+
+/** Where builder-init records what it set up. Read back when a lease is recovered. */
+const INIT_REPORT_PATH = '/var/run/builder/init.json';
 
 const leaseKey = (workspaceId) => `lease:${workspaceId}`;
 const ownerKey = (sessionId) => `owner:${sessionId}`;
@@ -93,17 +106,60 @@ export async function requireWorkspace(workspaceId, session) {
   return { ...lease, workspaceId, state: info.state };
 }
 
-async function recoverLeaseFromMosaic(workspaceId) {
+/**
+ * Rebuild a lease from the sandbox's own labels.
+ *
+ * Everything the lease needs is stored on the sandbox at create time, so a recovered
+ * lease is indistinguishable from a remembered one. An earlier version recovered only the
+ * id and session, which left `expiresAt` null and made the UI unable to show how long a
+ * workspace had left.
+ */
+export async function recoverLeaseFromMosaic(workspaceId) {
   const result = await mosaic.listSandboxesByLabel(LABEL_WORKSPACE, workspaceId).catch(() => null);
   const list = result?.sandboxes ?? (Array.isArray(result) ? result : []);
+  // "paused" is idle hibernation, not death: the next command wakes the guest.
   const match = list.find((s) => s.state !== 'destroyed');
   if (!match) return null;
+
+  const metadata = match.metadata ?? {};
+  const expiresAt = Number(metadata[LABEL_EXPIRES]);
+
   return {
     sandboxId: match.id,
-    sessionId: match.metadata?.[LABEL_SESSION] ?? '',
-    createdAt: Date.now(),
+    sessionId: metadata[LABEL_SESSION] ?? '',
+    createdAt: Number.isFinite(expiresAt) ? expiresAt - SANDBOX_LIMITS.ttlSeconds * 1000 : Date.now(),
+    expiresAt: Number.isFinite(expiresAt) ? expiresAt : undefined,
+    // Mosaic has no way to update labels after create, and the runtime report is only
+    // known once builder-init has run, so it is read from the guest on demand instead.
     runtime: null,
+    recovered: true,
   };
+}
+
+/**
+ * Read the containment report builder-init wrote inside the guest.
+ *
+ * Called only from the status endpoint, not from `requireWorkspace`: every tool call goes
+ * through the latter, and an extra exec per tool call would be pure overhead for
+ * information the tools do not use.
+ */
+export async function readRuntimeReport(sandboxId) {
+  const result = await mosaic
+    .exec(sandboxId, ['cat', INIT_REPORT_PATH], { timeoutMs: 15_000 })
+    .catch(() => null);
+  if (!result || result.exit_code !== 0) return null;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    return {
+      version: parsed.runtime_version ?? 'unknown',
+      containment: parsed.containment ?? 'unknown',
+      egressProxy: Boolean(parsed.egress_proxy),
+      portForwarder: Boolean(parsed.port_forwarder),
+      browserHelper: Boolean(parsed.browser_helper),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -138,10 +194,13 @@ export async function createWorkspace(session, inviteHash) {
   await releasePriorWorkspace(session);
 
   const workspaceId = newWorkspaceId();
+  const expiresAt = Date.now() + SANDBOX_LIMITS.ttlSeconds * 1000;
+
   const sandbox = await mosaic.createSandbox({
     labels: {
       [LABEL_WORKSPACE]: workspaceId,
       [LABEL_SESSION]: session.sid,
+      [LABEL_EXPIRES]: String(expiresAt),
       builder_invite: shortHash(inviteHash),
     },
   });
@@ -159,7 +218,7 @@ export async function createWorkspace(session, inviteHash) {
     sandboxId: sandbox.id,
     sessionId: session.sid,
     createdAt: Date.now(),
-    expiresAt: Date.now() + SANDBOX_LIMITS.ttlSeconds * 1000,
+    expiresAt,
     runtime,
   };
   await saveLease(workspaceId, lease);

@@ -102,6 +102,29 @@ generated page could otherwise redirect the whole builder tab) or `allow-same-or
 (which, with scripts, would let the frame reach this origin's storage and read the
 project).
 
+### Why the headers in `vercel.json` are what they are
+
+Vercel's config schema rejects unknown properties, so the reasoning lives here rather than
+as comments in the file.
+
+The `/builder` route gets a stricter policy than the rest of the site because it is the
+only page that renders untrusted model output and embeds a sandbox preview:
+
+- `connect-src` lists the relay plus the three provider origins the Agent Worker calls
+  directly with a user's own key. A custom endpoint therefore needs adding here as well as
+  in Settings — a deliberate friction, since it is the one case where a key leaves for a
+  host we do not control.
+- `frame-src` allows only the Mosaic preview origin, so a generated page cannot embed
+  anything else.
+- `frame-ancestors 'none'` and `X-Frame-Options: DENY` keep the builder itself out of
+  someone else's frame, which would otherwise enable clickjacking against a session.
+- `wasm-unsafe-eval` is present because the site's FFmpeg tooling needs WebAssembly; plain
+  `unsafe-eval` is not.
+- No third-party scripts load on this route at all.
+
+`/api/builder/*` responses are per-session and `no-store`, so a shared proxy can never
+serve one user's workspace state to another.
+
 ## Testing
 
 ```bash

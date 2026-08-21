@@ -22,6 +22,8 @@ import {
   createWorkspace,
   dropLease,
   loadLease,
+  readRuntimeReport,
+  recoverLeaseFromMosaic,
   requireWorkspace,
 } from '../../_lib/workspace.js';
 
@@ -35,12 +37,16 @@ export default async function handler(req, res) {
       const workspaceId = new URL(req.url, 'http://localhost').searchParams.get('workspace_id');
       if (!workspaceId) throw new HttpError(400, 'missing_workspace_id', 'workspace_id is required.');
       const lease = await requireWorkspace(workspaceId, session);
+      // A lease rebuilt from Mosaic labels has no runtime report, because the report only
+      // exists once builder-init has run and Mosaic cannot update labels after create.
+      const runtime = lease.runtime ?? (await readRuntimeReport(lease.sandboxId));
+
       return sendJson(res, 200, {
         workspace_id: workspaceId,
         state: lease.state,
         expires_at: lease.expiresAt ?? null,
         seconds_remaining: lease.expiresAt ? Math.max(0, Math.round((lease.expiresAt - Date.now()) / 1000)) : null,
-        runtime: lease.runtime,
+        runtime,
       });
     }
 
@@ -75,9 +81,18 @@ export default async function handler(req, res) {
       const workspaceId = body.workspace_id;
       if (!workspaceId) throw new HttpError(400, 'missing_workspace_id', 'workspace_id is required.');
 
-      const lease = await loadLease(workspaceId);
+      // Never conclude "already gone" from a store miss alone. Without Redis the store is
+      // per-instance memory and is cold on essentially every serverless invocation, so
+      // trusting it here silently skipped the destroy and leaked a live, billing sandbox
+      // for its full two-hour TTL. Ask Mosaic before giving up.
+      const lease = (await loadLease(workspaceId)) ?? (await recoverLeaseFromMosaic(workspaceId));
       if (!lease) return sendJson(res, 200, { ok: true, already_gone: true });
-      if (lease.sessionId !== session.sid) {
+
+      // A recovered lease whose labels carry no session id cannot prove ownership. Since
+      // the only action here is destruction, and the workspace id is an unguessable
+      // capability the caller already holds, allowing it is safer than leaking the
+      // sandbox -- but a mismatched id is still refused.
+      if (lease.sessionId && lease.sessionId !== session.sid) {
         throw new HttpError(403, 'not_your_workspace', 'This workspace belongs to another session.');
       }
 

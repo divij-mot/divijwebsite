@@ -5,7 +5,6 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "comment": "The builder renders untrusted model output and embeds a sandbox preview, so it gets a stricter policy than the rest of the site. connect-src covers the relay plus the direct provider endpoints the Agent Worker calls with a user's own key. frame-src allows only the Mosaic preview origin. No third-party scripts load on this route.",
       "source": "/builder",
       "headers": [
         {
@@ -23,7 +22,6 @@
       ]
     },
     {
-      "comment": "Builder API responses are per-session and must never be cached by a shared proxy.",
       "source": "/api/builder/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, max-age=0" },
