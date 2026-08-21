@@ -8,7 +8,7 @@
 import { zip } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
-import { CHAT_LOG_PATH, PROJECT_MANIFEST_PATH, PROJECT_SCHEMA_VERSION } from '../core/limits';
+import { CHAT_LOG_PATH, CONTEXT_PATH, PROJECT_MANIFEST_PATH, PROJECT_SCHEMA_VERSION } from '../core/limits';
 import type { ChatMessage, ProjectManifest } from '../core/types';
 import { exportZip, importZip, parseChatLog, readCentralDirectory, serializeChatLog } from '../transfer/zip';
 
@@ -171,6 +171,22 @@ describe('exportZip', () => {
     expect(imported.files.get('app/page.tsx')).toBeDefined();
     // Binary assets must survive byte for byte.
     expect(Array.from(imported.files.get('public/logo.png')!)).toEqual([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]);
+  });
+
+  it('keeps .builder/context.md in the project tree after re-import', async () => {
+    const withCtx = new Map(files);
+    withCtx.set(CONTEXT_PATH, encoder.encode('# Durable\n\nRooms poll /api/game. Share copies window.location.href.'));
+    const exported = await exportZip({
+      manifest: manifest(),
+      files: withCtx,
+      chat: [],
+      context: 'this fallback must not overwrite the live file',
+    });
+    const imported = await importZip(exported.bytes);
+    const restored = new TextDecoder().decode(imported.files.get(CONTEXT_PATH)!);
+    expect(restored).toContain('Rooms poll /api/game');
+    expect(restored).not.toContain('this fallback must not overwrite');
+    expect(imported.context).toContain('Rooms poll /api/game');
   });
 
   it('never writes a credential into the archive', async () => {

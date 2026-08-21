@@ -15,6 +15,7 @@ import { AGENT_LIMITS, TIMEOUTS_MS } from '../core/limits';
 import { randomId } from '../core/hash';
 import type { AgentTask, ChatMessage, ProviderSettings, ToolEventSummary } from '../core/types';
 import { allowEgressHost, callTool, ControlPlaneError } from '../net/controlPlane';
+import { compactTurnMessages } from './compact';
 import { getPreset } from './presets';
 import { buildSystemPrompt } from './prompt';
 import { createChatCompletionsAdapter } from './providers/chatCompletions';
@@ -351,7 +352,8 @@ async function runTurn(command: Extract<WorkerCommand, { type: 'start-turn' }>):
       }),
     },
     // Prior turns are replayed as plain text. Their tool traffic is deliberately not
-    // resent: it would dominate the context window, and the summaries carry what matters.
+    // resent: it would dominate the window, and `.builder/context.md` plus summaries
+    // carry what matters. Chat itself stays in full until the character budget is hit.
     ...command.history
       .filter((m) => m.role !== 'system' && m.content.trim())
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
@@ -368,6 +370,7 @@ async function runTurn(command: Extract<WorkerCommand, { type: 'start-turn' }>):
     for (let step = 0; step < AGENT_LIMITS.maxToolStepsPerTurn; step += 1) {
       if (signal.aborted) break;
       status('thinking', step);
+      compactTurnMessages(conversation);
 
       const calls: ToolCallRequest[] = [];
       let stepText = '';

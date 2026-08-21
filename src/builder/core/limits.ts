@@ -43,7 +43,7 @@ export const TIMEOUTS_MS = {
 } as const;
 
 export const AGENT_LIMITS = {
-  maxToolStepsPerTurn: 20,
+  maxToolStepsPerTurn: 28,
   maxVerificationRetries: 2,
   /** Model-visible output cap per tool call. Truncation is always disclosed to the model. */
   maxToolOutputBytes: 200 * 1024,

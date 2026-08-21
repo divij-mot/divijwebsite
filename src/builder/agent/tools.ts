@@ -28,7 +28,7 @@ export const AGENT_TOOLS: ToolSchema[] = [
   {
     name: 'fs_read',
     description:
-      'Read up to 20 files at once. Always read a file before editing it — editing from memory is the most common cause of a failed patch.',
+      'Read up to 20 files at once. Always read a file before editing it — editing from memory is the most common cause of a failed patch. Read .builder/context.md for architecture and share/join notes that survive ZIP export/import.',
     parameters: {
       type: 'object',
       properties: {
@@ -54,7 +54,7 @@ export const AGENT_TOOLS: ToolSchema[] = [
   {
     name: 'fs_write',
     description:
-      'Create files or replace them entirely. For an existing file prefer fs_patch: a full rewrite discards code you did not intend to touch. Never write a secret value into a file.',
+      'Create files or replace them entirely. For an existing file prefer fs_patch: a full rewrite discards code you did not intend to touch. Never write a secret value into a file. After architecture or share/join decisions, update .builder/context.md — that file is in the ZIP and restored on re-import.',
     parameters: {
       type: 'object',
       properties: {

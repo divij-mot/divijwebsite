@@ -34,7 +34,7 @@ export const TIMEOUTS_MS = {
 };
 
 export const AGENT_LIMITS = {
-  maxToolStepsPerTurn: 20,
+  maxToolStepsPerTurn: 28,
   maxVerificationRetries: 2,
   maxToolOutputBytes: 200 * 1024,
   maxFilesPerRead: 20,

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { randomId } from '../core/hash';
-import { PROJECT_SCHEMA_VERSION } from '../core/limits';
+import { PROJECT_SCHEMA_VERSION, CONTEXT_PATH } from '../core/limits';
 import { extractOversizedMarkup, safeUploadName } from '../core/pastedAssets';
 import type {
   AgentStatus,
@@ -24,6 +24,7 @@ import type {
   WorkspaceLease,
 } from '../core/types';
 import { buildProjectContext } from '../agent/prompt';
+import { clipDurableMemory, prepareHistory, recentWorkSummaries, seedDurableContext, upsertFilesSection } from '../agent/compact';
 import type { WorkerCommand, WorkerEvent } from '../agent/protocol';
 import * as api from '../net/controlPlane';
 import * as db from '../storage/db';
@@ -41,6 +42,27 @@ function utf8ToBase64(content: string): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   }
   return btoa(binary);
+}
+
+async function persistDurableContext(project: ProjectStore, workspaceId: string | null): Promise<void> {
+  let existing = '';
+  try {
+    existing = await project.readText(CONTEXT_PATH);
+  } catch {
+    /* first write */
+  }
+  const next = existing.trim()
+    ? upsertFilesSection(existing, project.listPaths())
+    : seedDurableContext({ name: project.manifest.name, files: project.listPaths() });
+  await project.writeFile({ path: CONTEXT_PATH, content: next });
+  if (!workspaceId) return;
+  await api
+    .callTool({
+      workspaceId,
+      tool: 'fs.sync',
+      args: { files: [{ path: CONTEXT_PATH, content_base64: utf8ToBase64(next) }] },
+    })
+    .catch(() => {});
 }
 
 export type SandboxPhase = 'none' | 'creating' | 'hydrating' | 'ready' | 'error';
@@ -230,6 +252,7 @@ export function useBuilder() {
           if (project && !project.readOnly) {
             await project.appendMessage(message.message);
             await project.createCheckpoint('post-turn', 'After agent turn');
+            await persistDurableContext(project, leaseRef.current?.workspaceId ?? null);
           }
           streamingIdRef.current = null;
           patch({ streamingText: '', streamingToolEvents: [] });
@@ -413,6 +436,7 @@ export function useBuilder() {
         await project.writeFiles(
           Object.entries(scaffold.files).map(([path, content]) => ({ path, content })),
         );
+        await persistDurableContext(project, null);
         await project.createCheckpoint('import', 'Initial scaffold');
         await openProject(project);
         patch({ notice: `Created ${scaffold.manifest.name}.` });
@@ -435,12 +459,17 @@ export function useBuilder() {
         const project = await ProjectStore.create(imported.manifest);
         await project.writeFiles([...imported.files].map(([path, content]) => ({ path, content })));
         if (imported.chat.length) await project.replaceChat(imported.chat);
+        if (!imported.files.has(CONTEXT_PATH) && imported.context?.trim()) {
+          await project.writeFile({ path: CONTEXT_PATH, content: imported.context });
+        }
+        await persistDurableContext(project, null);
         await project.createCheckpoint('import', `Imported ${file.name}`);
         await openProject(project);
 
         const notes = [
           `Imported ${imported.audit.fileCount} files.`,
           imported.restoredFromBuilder ? 'Chat history restored.' : '',
+          imported.files.has(CONTEXT_PATH) || imported.context ? 'Project memory restored.' : '',
           imported.audit.rejected.length ? `${imported.audit.rejected.length} entries were skipped.` : '',
           ...imported.audit.warnings,
         ].filter(Boolean);
@@ -464,19 +493,22 @@ export function useBuilder() {
         for (const path of project.listPaths()) {
           files.set(path, await project.readBytes(path));
         }
+        let context = '';
+        try {
+          context = await project.readText(CONTEXT_PATH);
+        } catch {
+          context = buildProjectContext({
+            manifest: project.manifest,
+            files: project.listPaths(),
+            recentSummaries: recentWorkSummaries(project.chat),
+          });
+        }
         const result = await exportZip({
           manifest: project.manifest,
           files,
           chat: project.chat,
           includeChat,
-          context: buildProjectContext({
-            manifest: project.manifest,
-            files: project.listPaths(),
-            recentSummaries: project.chat
-              .filter((m) => m.role === 'assistant')
-              .slice(-8)
-              .map((m) => m.content.slice(0, 160)),
-          }),
+          context,
         });
 
         downloadZip(result.bytes, project.manifest.name);
@@ -662,7 +694,7 @@ export function useBuilder() {
               files: await Promise.all(
                 uploaded.map(async (path) => ({
                   path,
-                  content_base64: utf8ToBase64(await project.readFile(path)),
+                  content_base64: utf8ToBase64(await project.readText(path)),
                 })),
               ),
             },
@@ -682,21 +714,29 @@ export function useBuilder() {
 
       patch({ busy: 'Working', error: null, streamingText: '', streamingToolEvents: [] });
 
+      await persistDurableContext(project, lease.workspaceId);
+      let durable = '';
+      try {
+        durable = clipDurableMemory(await project.readText(CONTEXT_PATH));
+      } catch {
+        /* seed happens in persistDurableContext */
+      }
+
+      const prior = prepareHistory([...project.chat].slice(0, -1));
       send({
         type: 'start-turn',
         prompt: text,
         workspaceId: lease.workspaceId,
         manifest: project.manifest,
-        history: [...project.chat].slice(0, -1),
+        history: prior.history,
         fileCount: project.listPaths().length,
         isNewProject: project.chat.length <= 1,
         projectContext: buildProjectContext({
           manifest: project.manifest,
           files: project.listPaths(),
-          recentSummaries: project.chat
-            .filter((m) => m.role === 'assistant')
-            .slice(-8)
-            .map((m) => m.content.slice(0, 160)),
+          recentSummaries: recentWorkSummaries(project.chat),
+          earlierDigest: prior.earlierDigest,
+          durableMemory: durable,
         }),
       });
     },

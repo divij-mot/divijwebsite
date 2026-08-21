@@ -177,9 +177,10 @@ export async function importZip(bytes: Uint8Array, fallbackName = 'imported-proj
     : [];
   const context = files.has(CONTEXT_PATH) ? decoder.decode(files.get(CONTEXT_PATH)!) : null;
 
-  // Metadata is consumed here, not stored as project source.
+  // .builder/project.json and chat.jsonl are restored into IndexedDB, not as source.
+  // .builder/context.md stays in the tree so download → re-import still has durable notes.
   for (const p of [...files.keys()]) {
-    if (p.startsWith(`${BUILDER_METADATA_DIR}/`)) files.delete(p);
+    if (p.startsWith(`${BUILDER_METADATA_DIR}/`) && p !== CONTEXT_PATH) files.delete(p);
   }
 
   const resolved =
@@ -275,7 +276,10 @@ export async function exportZip(input: ExportInput): Promise<ExportResult> {
   entries[PROJECT_MANIFEST_PATH] = encoder.encode(
     JSON.stringify({ ...input.manifest, updatedAt: Date.now() }, null, 2) + '\n',
   );
-  entries[CONTEXT_PATH] = encoder.encode(input.context);
+  // Prefer the live `.builder/context.md` from the tree; fall back to the generated string.
+  if (!entries[CONTEXT_PATH]) {
+    entries[CONTEXT_PATH] = encoder.encode(input.context);
+  }
   if (input.includeChat !== false) {
     entries[CHAT_LOG_PATH] = encoder.encode(serializeChatLog(input.chat));
   }
