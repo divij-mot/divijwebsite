@@ -27,3 +27,4 @@ dist-ssr
 
 # TypeScript incremental build state
 *.tsbuildinfo
+.env*.local

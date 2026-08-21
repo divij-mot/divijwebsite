@@ -46,8 +46,26 @@ Nothing in the second half of that table can reconstruct a project.
 
 2. **Set the environment variables** from [`.env.example`](../.env.example). The required
    ones are `MOSAIC_API_KEY`, `BUILDER_SESSION_SECRET`, and `BUILDER_INVITE_CODES`.
-   Upstash Redis and Turnstile are optional; without Redis, quotas and invite revocation
-   fall back to per-instance memory, which is fine for a solo beta.
+
+   **Redis is optional but quotas do nothing without it.** The store falls back to
+   per-instance memory, and since every serverless invocation gets a fresh instance, the
+   hourly and daily limits count from zero every time. The invite gate and the
+   one-sandbox-per-session rule still work. Provision it with:
+
+   ```bash
+   vercel integration add upstash/upstash-kv
+   ```
+
+   That sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` on the project, which the store
+   accepts as aliases for the `UPSTASH_` names. One local-development wrinkle: the
+   integration writes them to `.env.local`, but `vercel dev` reads `.env`, so copy those
+   two values across or local runs will silently use the memory driver. Confirm with:
+
+   ```bash
+   node scripts/check-store.mjs
+   ```
+
+   Turnstile is also optional and skipped entirely when no secret key is set.
 
 3. **Verify the gate** before trusting anything:
 
@@ -128,9 +146,11 @@ serve one user's workspace state to another.
 ## Testing
 
 ```bash
-npm test           # 187 unit tests
-npm run typecheck  # tsc over src/builder
+npm test                       # 187 unit tests
+npm run typecheck              # tsc over src/builder
+node scripts/check-store.mjs   # 14 checks: is Redis wired up, do quotas enforce
 node scripts/e2e-sandbox.mjs   # 22 live checks against a real sandbox
+node scripts/e2e-api.mjs       # 32 checks over the HTTP control plane (needs `vercel dev`)
 ```
 
 The unit tests cover archive hardening, path containment (the same rejection corpus runs
@@ -141,6 +161,13 @@ boundaries, and the scaffold's build-without-credentials contract.
 `scripts/e2e-sandbox.mjs` calls the real `api/_lib/tools.js` implementations rather than
 reimplementing them, so a bug in shipped code fails the run. It covers acceptance
 scenarios 1, 3, and 7 from the plan.
+
+`scripts/e2e-api.mjs` covers everything above the library layer — routing, the session
+cookie's flags, origin enforcement, server-side path validation, NDJSON framing, egress
+approval, and relay SSRF refusal. It exists because both bugs found after the initial
+implementation lived exactly there and nothing else would have caught them. Two of its
+assertions are regression guards: one for a `DELETE` that leaked a live sandbox, one for a
+recovered lease that lost its expiry.
 
 `scripts/mosaic-feasibility.mjs` includes a regression guard that **passes while a known
 Mosaic defect is still present** and fails if it is fixed, so the workaround gets removed
