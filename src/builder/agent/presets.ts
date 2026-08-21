@@ -41,6 +41,19 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     docsUrl: 'https://fireworks.ai/account/api-keys',
   },
   {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    protocol: 'openai-chat',
+    baseUrl: 'https://api.deepseek.com',
+    // Direct rather than relayed: DeepSeek reflects the request Origin in its CORS
+    // headers, so the browser can call it itself and the key never reaches our server at
+    // all. That is strictly better than relaying, which is only a workaround for
+    // providers that refuse browser requests.
+    transport: 'direct',
+    defaultModel: 'deepseek-v4-pro',
+    docsUrl: 'https://platform.deepseek.com/api_keys',
+  },
+  {
     id: 'custom',
     label: 'Custom OpenAI-compatible endpoint',
     protocol: 'openai-chat',
@@ -73,5 +86,6 @@ export const SUGGESTED_MODELS: Record<string, string[]> = {
     'accounts/fireworks/models/qwen3-coder-480b-a35b-instruct',
     'accounts/fireworks/models/deepseek-v3p1',
   ],
+  deepseek: ['deepseek-v4-pro', 'deepseek-v4-flash'],
   custom: [],
 };

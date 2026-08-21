@@ -5,11 +5,26 @@
  * its sandbox attribute is the security boundary and is set deliberately rather than
  * copied from an example.
  *
- * Granted: scripts, forms, modals, popups, and downloads, because a real app needs them.
- * Withheld: allow-top-navigation (a generated page could otherwise redirect the whole
- * builder tab to a phishing page) and allow-same-origin (which, combined with
- * allow-scripts, would let the frame reach into this origin's storage and read the
- * project). The preview is cross-origin anyway, so same-origin buys nothing but risk.
+ * Granted: scripts, forms, modals, popups, downloads, and same-origin.
+ *
+ * `allow-same-origin` deserves the explanation, because it looks alarming next to
+ * `allow-scripts`. That pairing is dangerous only when the frame is same-origin with its
+ * parent, where the frame's script could reach `parent.document` and strip its own
+ * sandbox. Here the preview is served from sandbox.mosaicos.com while the builder runs on
+ * its own domain, and CSP `frame-src` pins it to that host, so the two can never share an
+ * origin. What the flag actually does is let the framed document keep its own origin
+ * instead of being assigned an opaque one. Without it the app gets no storage at all --
+ * `localStorage` throws a SecurityError, and a Next.js app fails to hydrate and renders
+ * blank, which is exactly what happened before this was added.
+ *
+ * Withheld: allow-top-navigation, because a generated page could otherwise redirect the
+ * whole builder tab to a phishing page. Camera, microphone, clipboard, and the rest are
+ * denied through the empty `allow` attribute and the route's Permissions-Policy.
+ *
+ * Mosaic currently sends `X-Frame-Options: DENY` and `frame-ancestors 'none'` on preview
+ * URLs (copied from the control-plane app). When that is detected the pane does not
+ * render an iframe at all -- a blank white rectangle looks like our bug. The same URL
+ * still works in a top-level tab.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -54,9 +69,10 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
   }, [expiresIn, onRefresh]);
 
   const width = VIEWPORTS[viewport].width;
+  const canEmbed = preview?.embeddable !== false;
   const frameSrc = useMemo(
-    () => (preview ? `${preview.url}${preview.url.includes('?') ? '&' : '?'}__r=${reloadKey}` : ''),
-    [preview, reloadKey],
+    () => (preview && canEmbed ? `${preview.url}${preview.url.includes('?') ? '&' : '?'}__r=${reloadKey}` : ''),
+    [preview, canEmbed, reloadKey],
   );
 
   return (
@@ -114,14 +130,30 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
       </div>
 
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-900/40 p-3">
-        {preview ? (
+        {preview && !canEmbed ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-sm text-neutral-200">Preview is ready in a new tab</p>
+            <p className="max-w-sm text-xs leading-relaxed text-neutral-500">
+              Mosaic is sending headers that refuse to be framed, so this pane cannot show the
+              app. The same URL works when opened on its own.
+            </p>
+            <a
+              href={preview.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-200"
+            >
+              Open live preview
+            </a>
+          </div>
+        ) : preview ? (
           <iframe
             key={frameSrc}
             ref={frameRef}
             src={frameSrc}
             title="App preview"
-            // See the file header: top navigation and same-origin are withheld on purpose.
-            sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads allow-popups-to-escape-sandbox"
+            // See the file header for why same-origin is safe here and top navigation is not.
+            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-popups-to-escape-sandbox"
             referrerPolicy="no-referrer"
             allow=""
             className="h-full rounded-lg border border-neutral-800 bg-white shadow-2xl"

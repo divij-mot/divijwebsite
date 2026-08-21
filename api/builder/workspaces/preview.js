@@ -12,6 +12,7 @@
 
 import { SANDBOX_LIMITS } from '../../_lib/limits.js';
 import * as mosaic from '../../_lib/mosaic.js';
+import { previewEmbeddable } from '../../_lib/previewEmbed.js';
 import {
   HttpError,
   assertSameOrigin,
@@ -60,12 +61,14 @@ export default async function handler(req, res) {
     const existing = await store.recallPreview(body.workspace_id);
     if (existing && existing.expiresAt - Date.now() > RENEW_MARGIN_MS && !body.force) {
       const ready = await mosaic.previewReady(lease.sandboxId, existing.previewId).catch(() => ({ ready: false }));
-      if (ready.ready) {
+      if (ready.ready && existing.url) {
+        const embeddable = await previewEmbeddable(existing.url);
         return sendJson(res, 200, {
           url: existing.url,
           expires_at: existing.expiresAt,
           port,
           reused: true,
+          embeddable,
         });
       }
     }
@@ -95,12 +98,14 @@ export default async function handler(req, res) {
       24 * 60 * 60,
     );
 
+    const embeddable = await previewEmbeddable(preview.url);
     return sendJson(res, 200, {
       url: preview.url,
       expires_at: expiresAt,
       port,
       ready,
       reused: false,
+      embeddable,
       ...(ready
         ? {}
         : { warning: 'The preview URL exists but the dev server has not answered yet. It may still be starting.' }),

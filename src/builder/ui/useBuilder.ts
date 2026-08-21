@@ -93,6 +93,7 @@ export function useBuilder() {
   const projectRef = useRef<ProjectStore | null>(null);
   const leaseRef = useRef<WorkspaceLease | null>(null);
   const streamingIdRef = useRef<string | null>(null);
+  const probedPreviewUrlRef = useRef<string | null>(null);
 
   const patch = useCallback((next: Partial<BuilderState>) => {
     setState((prev) => ({ ...prev, ...next }));
@@ -280,6 +281,20 @@ export function useBuilder() {
       }
     })();
   }, [patch, refreshProject]);
+
+  // An in-memory preview from before the embeddable probe existed has no flag. Reuse the
+  // URL (do not rotate it) so the pane can switch from a white iframe to the fallback.
+  useEffect(() => {
+    const lease = leaseRef.current;
+    const preview = state.preview;
+    if (!lease || !preview || typeof preview.embeddable === 'boolean') return;
+    if (probedPreviewUrlRef.current === preview.url) return;
+    probedPreviewUrlRef.current = preview.url;
+    void api
+      .startPreview(lease.workspaceId, false)
+      .then((next) => patch({ preview: next }))
+      .catch(() => {});
+  }, [state.preview, patch]);
 
   // -------------------------------------------------------------------------
   // Projects

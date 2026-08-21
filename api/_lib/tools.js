@@ -320,8 +320,11 @@ git status --porcelain=v1 -uall 2>/dev/null | head -2000
     let path = line.slice(3).trim();
     if (path.includes(' -> ')) path = path.split(' -> ')[1];
     path = path.replace(/^"|"$/g, '');
-    // Dependencies and build output are regenerated, never mirrored back.
-    if (/^(node_modules|\.next|dist|build|\.turbo|coverage|\.git)\//.test(path)) continue;
+    // Dependencies and build output are regenerated, never mirrored back. Incremental
+    // build state is excluded too: tsc and Next write it on every build, so mirroring it
+    // adds a large, meaningless file to the project and to every export.
+    if (/^(node_modules|\.next|dist|build|out|\.turbo|coverage|\.git)\//.test(path)) continue;
+    if (/(^|\/)[^/]*\.tsbuildinfo$/.test(path)) continue;
     changed.push({ path, status: status === 'D' ? 'deleted' : status === 'A' ? 'added' : 'modified' });
   }
 

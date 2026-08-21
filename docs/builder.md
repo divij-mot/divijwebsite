@@ -115,10 +115,16 @@ injected as HTML, and links are restricted to http(s). The `/builder` route ship
 that permits no third-party scripts.
 
 **The preview iframe.** Sandboxed with `allow-scripts allow-forms allow-modals
-allow-popups allow-downloads`, and deliberately **without** `allow-top-navigation` (a
-generated page could otherwise redirect the whole builder tab) or `allow-same-origin`
-(which, with scripts, would let the frame reach this origin's storage and read the
-project).
+allow-popups allow-downloads` and `allow-same-origin`. Same-origin is safe here because
+the preview is served from `sandbox.mosaicos.com` and can never share an origin with the
+builder; without it a Next.js app gets an opaque origin, `localStorage` throws, and the
+frame hydrates to a blank page. Top navigation is withheld so a generated page cannot
+redirect the builder tab.
+
+Mosaic currently copies the control-plane `X-Frame-Options: DENY` and
+`frame-ancestors 'none'` onto preview responses. The control plane probes those headers
+and the pane falls back to "open in a new tab" instead of showing a white iframe. When
+Mosaic stops sending them, the iframe is used again.
 
 ### Why the headers in `vercel.json` are what they are
 
@@ -128,10 +134,10 @@ as comments in the file.
 The `/builder` route gets a stricter policy than the rest of the site because it is the
 only page that renders untrusted model output and embeds a sandbox preview:
 
-- `connect-src` lists the relay plus the three provider origins the Agent Worker calls
-  directly with a user's own key. A custom endpoint therefore needs adding here as well as
-  in Settings — a deliberate friction, since it is the one case where a key leaves for a
-  host we do not control.
+- `connect-src` lists `'self'` (the model relay) plus the provider origins the Agent Worker
+  calls directly with a user's own key (currently DeepSeek). A custom endpoint therefore
+  needs adding here as well as in Settings — a deliberate friction, since it is the one
+  case where a key leaves for a host we do not control.
 - `frame-src` allows only the Mosaic preview origin, so a generated page cannot embed
   anything else.
 - `frame-ancestors 'none'` and `X-Frame-Options: DENY` keep the builder itself out of
@@ -146,7 +152,7 @@ serve one user's workspace state to another.
 ## Testing
 
 ```bash
-npm test                       # 187 unit tests
+npm test                       # unit tests
 npm run typecheck              # tsc over src/builder
 node scripts/check-store.mjs   # 14 checks: is Redis wired up, do quotas enforce
 node scripts/e2e-sandbox.mjs   # 22 live checks against a real sandbox

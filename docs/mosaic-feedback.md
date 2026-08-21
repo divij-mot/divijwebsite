@@ -129,6 +129,21 @@ what is preserved — `ENV` yes, `WORKINGDIR` no, `USER` no, `ENTRYPOINT` no —
 
 ---
 
+### 10. Preview URLs cannot be embedded in an iframe
+
+`GET` on a working preview URL returns the guest HTML (a Next.js app, in our case) but
+attaches the Mosaic control-plane security headers: `X-Frame-Options: DENY` and CSP
+`frame-ancestors 'none'`, including `connect-src` entries for Google accounts and GitHub
+that the guest never set. The URL renders correctly in a top-level tab and is blank in a
+cross-origin iframe, which is the embedding the docs imply preview URLs are for. Preview
+responses should forward the guest's own headers, or at least drop `X-Frame-Options` and
+set `frame-ancestors *` (or a caller-supplied origin) on `sandbox.mosaicos.com/preview/*`.
+
+Reproduction: create a preview, `curl -sSD - -o /tmp/p.html "$URL"`, observe the guest
+body and the control-plane CSP on the same response, then load the URL in an iframe.
+
+---
+
 ### 9. Preview URLs return 502 rather than a clear "revoked" response
 
 After `DELETE /v1/sandboxes/{id}/previews/{preview_id}`, the URL starts returning a bare
@@ -154,7 +169,7 @@ distinction free.
 - **Idle hibernation is genuinely transparent.** A sandbox left alone for 20 seconds came
   back on the next file read with its workspace intact and no special handling.
 - **Preview URLs behave correctly, including revocation.** A revoked preview stopped
-  serving immediately, which is what we needed before embedding one in an iframe.
+  serving immediately. Framing is a separate bug (item 10); revocation itself is fine.
 
 ---
 
@@ -188,6 +203,7 @@ customer with the same requirement will build again.
 | 5 | High | Guest kernel has no nf_tables and no `xt_owner`, so in-guest firewalling is impossible. |
 | 3 | Medium | Long `exec` calls return Cloudflare HTML instead of honouring `timeout_ms`. |
 | 4 | Medium | 5xx responses during a degraded runtime are HTML, not the documented JSON error shape. |
+| 10 | High | Preview URLs send `X-Frame-Options: DENY`, so they cannot be iframed. |
 | 9 | Low | Revoked previews return a bare 502 rather than something distinguishable. |
 | 6 | Low | `openapi.json` omits required query parameters on two endpoints. |
 | 7 | Low | Not documented that commands run as root. |

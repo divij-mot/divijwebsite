@@ -215,6 +215,11 @@ export interface PreviewInfo {
   url: string;
   expiresAt: number;
   port: number;
+  /**
+   * False when Mosaic's preview response refuses to be framed (`X-Frame-Options: DENY`
+   * or CSP `frame-ancestors 'none'`). The URL still works in a top-level tab.
+   */
+  embeddable?: boolean;
 }
 
 export type ToolEventKind =

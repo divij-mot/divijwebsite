@@ -50,8 +50,31 @@ export async function acquireProjectLock(projectId: string): Promise<ProjectLock
           resolveLock({ state: 'reader', released: Promise.resolve(), release: () => {} });
           return;
         }
-        resolveLock({ state: 'writer', released, release });
+
+        // Release when the page goes away. Navigating within the tab can put the old
+        // document in the back/forward cache rather than discarding it, and a bfcached
+        // document keeps holding its locks -- so reloading /builder would find the
+        // project "open in another tab" and drop into read-only mode against itself.
+        // pagehide fires for both bfcache entry and real unload, unlike unload.
+        const releaseOnHide = () => release();
+        if (typeof addEventListener === 'function') {
+          addEventListener('pagehide', releaseOnHide);
+        }
+
+        resolveLock({
+          state: 'writer',
+          released,
+          release: () => {
+            if (typeof removeEventListener === 'function') {
+              removeEventListener('pagehide', releaseOnHide);
+            }
+            release();
+          },
+        });
         await released;
+        if (typeof removeEventListener === 'function') {
+          removeEventListener('pagehide', releaseOnHide);
+        }
       },
     );
   });

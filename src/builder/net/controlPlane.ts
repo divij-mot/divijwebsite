@@ -121,11 +121,23 @@ export const destroyWorkspace = (workspaceId: string) =>
 // ---------------------------------------------------------------------------
 
 export async function startPreview(workspaceId: string, force = false): Promise<PreviewInfo & { ready: boolean }> {
-  const r = await request<{ url: string; expires_at: number; port: number; ready?: boolean }>(
-    '/api/builder/workspaces/preview',
-    { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId, force }) },
-  );
-  return { url: r.url, expiresAt: r.expires_at, port: r.port, ready: r.ready !== false };
+  const r = await request<{
+    url: string;
+    expires_at: number;
+    port: number;
+    ready?: boolean;
+    embeddable?: boolean;
+  }>('/api/builder/workspaces/preview', {
+    method: 'POST',
+    body: JSON.stringify({ workspace_id: workspaceId, force }),
+  });
+  return {
+    url: r.url,
+    expiresAt: r.expires_at,
+    port: r.port,
+    ready: r.ready !== false,
+    ...(typeof r.embeddable === 'boolean' ? { embeddable: r.embeddable } : {}),
+  };
 }
 
 export const stopPreview = (workspaceId: string) =>

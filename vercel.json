@@ -9,7 +9,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.openai.com https://openrouter.ai https://api.fireworks.ai; frame-src https://sandbox.mosaicos.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.openai.com https://openrouter.ai https://api.fireworks.ai https://api.deepseek.com; frame-src https://sandbox.mosaicos.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
         },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -32,7 +32,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|src/|@|node_modules/|.*\\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|wasm|txt|xml|pdf|mp4|webm)$).*)",
       "destination": "/index.html"
     }
   ]
