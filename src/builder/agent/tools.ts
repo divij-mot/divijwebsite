@@ -144,7 +144,7 @@ export const AGENT_TOOLS: ToolSchema[] = [
   {
     name: 'dev_start',
     description:
-      'Start or restart the dev server and wait for it to answer. Call this after installing dependencies and after any change to config that the dev server reads at boot.',
+      'Start or restart the dev server and wait for it to answer. Bind 0.0.0.0:3000 so the public preview URL works for other phones, not just the iframe. Call this after installing dependencies and after any change to config that the dev server reads at boot.',
     parameters: {
       type: 'object',
       properties: {

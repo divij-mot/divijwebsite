@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Monitor, RefreshCw, Smartphone, Tablet } from 'lucide-react';
+import { Check, ExternalLink, Link2, Loader2, Monitor, RefreshCw, Smartphone, Tablet } from 'lucide-react';
 
 import type { PreviewInfo } from '../../core/types';
 import type { SandboxPhase } from '../useBuilder';
@@ -60,6 +60,7 @@ export function PreviewPanel({
   const [viewport, setViewport] = useState<keyof typeof VIEWPORTS>('desktop');
   const [reloadKey, setReloadKey] = useState(0);
   const [expiresIn, setExpiresIn] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -72,11 +73,6 @@ export function PreviewPanel({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [preview]);
-
-  // Rotate before the URL dies rather than letting the user hit an expired page.
-  useEffect(() => {
-    if (expiresIn !== null && expiresIn > 0 && expiresIn < 60) onRefresh();
-  }, [expiresIn, onRefresh]);
 
   const width = VIEWPORTS[viewport].width;
   const frameSrc = useMemo(() => {
@@ -112,7 +108,7 @@ export function PreviewPanel({
           {expiresIn !== null && (
             <span
               className={`tabular-nums text-[11px] ${expiresIn < 120 ? 'text-amber-500' : 'text-neutral-600'}`}
-              title="Public preview link — 15 minutes. The sandbox lasts 2 hours, and your project is saved locally. This timer rotates the link, not the project."
+              title="Public player link. Refreshing this bar mints a new URL and kicks other phones off."
             >
               {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, '0')}
             </span>
@@ -124,11 +120,28 @@ export function PreviewPanel({
               onRefresh();
             }}
             disabled={!preview && sandboxPhase !== 'ready'}
-            title="Mint a fresh preview URL"
+            title="Mint a new player URL. Anyone still on the old link will be kicked off."
             className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 disabled:opacity-30"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
+          {preview && (
+            <button
+              type="button"
+              onClick={() => {
+                const link = preview.url;
+                if (!link) return;
+                void navigator.clipboard.writeText(link).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                });
+              }}
+              title="Copy the public player link (Mosaic URL, not the iframe)"
+              className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Link2 className="h-3.5 w-3.5" />}
+            </button>
+          )}
           {preview && preview.ready !== false && (
             <a
               href={preview.url}
@@ -149,7 +162,7 @@ export function PreviewPanel({
             <iframe
               key={frameSrc}
               ref={frameRef}
-              src={previewStarting || preview.ready === false ? 'about:blank' : frameSrc}
+              src={frameSrc || 'about:blank'}
               title="App preview"
               // See the file header for why same-origin is safe here and top navigation is not.
               sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-popups-to-escape-sandbox"

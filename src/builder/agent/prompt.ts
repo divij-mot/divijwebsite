@@ -37,6 +37,19 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 - The dev server must bind 0.0.0.0, not localhost, or the preview shows nothing. dev_start already does this.
 - ${ctx.isNewProject ? 'This is a new project.' : `This project has ${ctx.fileCount} files.`}
 
+# Live apps other people can join
+
+The sandbox is a real Node process. For about two hours, anyone with the public preview URL (the "Open in a new tab" / player link — a mosaicos.com URL, never localhost and never the iframe origin) can hit that process. Use it as the backend for multiplayer, lobbies, and party games that do not need to outlive the session.
+
+- Do not use WebSockets. The Mosaic preview tunnel is HTTP and drops upgrades. Use Next.js Route Handlers and have clients poll every 300–500ms.
+- Keep room state in a module-level Map or a JSON file under data/. That is enough for the sandbox lifetime. Postgres/DATABASE_URL is for apps the user will deploy and keep; skip it for a game that dies when the sandbox does.
+- Put a "Share with players" control in the UI that copies the public preview origin (window.location.origin when they are already on that URL). Rotating the preview URL kicks everyone off — do not mint a new one mid-game.
+- Large HTML/JSON dumps arrive as files under uploads/. Parse them with a script. Never paste the dump back into chat or into the page source.
+
+# JeopardyLabs boards
+
+Play-mode exports use: categories in \`.grid-row-cats .cat-cell\`; each clue in \`.grid-row-questions .grid-cell\` with data-row/data-col; dollar value in \`.cell-inner\`; prompt in \`.front.answer\`; official response in \`.back.question\`. Auto-judge by normalizing (lowercase, strip punctuation, strip a leading "what is" / "who is" / "a" / "an" / "the"). Everyone answers the same clue on a shared timer. The first correct answer scores a large bonus over later correct answers. After each clue, show scores, then the winner picks the next unused cell, then a 3-2-1 countdown before that clue starts.
+
 # Project
 
 - Framework: ${manifest.framework}

@@ -383,12 +383,29 @@ export async function writeLargeFile(id, path, buffer) {
 // Previews
 // ---------------------------------------------------------------------------
 
-export function createPreview(id, port, expiresInSeconds = SANDBOX_LIMITS.previewExpirySeconds) {
-  return request('POST', `/v1/sandboxes/${id}/previews`, {
-    port,
-    expires_in_seconds: expiresInSeconds,
-    require_auth: false,
-  });
+export async function createPreview(id, port, expiresInSeconds = SANDBOX_LIMITS.previewExpirySeconds) {
+  try {
+    return await request('POST', `/v1/sandboxes/${id}/previews`, {
+      port,
+      expires_in_seconds: expiresInSeconds,
+      require_auth: false,
+    });
+  } catch (err) {
+    // Mosaic may cap TTL below the sandbox lifetime. Fall back to 15 minutes rather than
+    // failing the whole preview mint; the host still sees the timer and can share the URL.
+    if (
+      expiresInSeconds > 900 &&
+      err instanceof MosaicError &&
+      (err.status === 400 || err.status === 422)
+    ) {
+      return request('POST', `/v1/sandboxes/${id}/previews`, {
+        port,
+        expires_in_seconds: 900,
+        require_auth: false,
+      });
+    }
+    throw err;
+  }
 }
 
 export function previewReady(id, previewId) {

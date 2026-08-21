@@ -64,8 +64,32 @@ function withPort(hostname, port) {
 
 function productionHost() {
   const raw =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.PREVIEW_PARENT_ORIGIN || 'divijmotwani.com';
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.PREVIEW_PARENT_ORIGIN || 'www.divijmotwani.com';
   return raw.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/**
+ * Unique Vercel URLs (`project-hash-team.vercel.app`) are behind Deployment Protection
+ * and send `X-Frame-Options: DENY` on the SSO interstitial. The production alias
+ * (`project.vercel.app`) is public and can actually be framed.
+ */
+export function publicDeploymentHost(vercelUrl) {
+  const host = String(vercelUrl || '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+  if (!host.endsWith('.vercel.app')) return host;
+  const name = host.slice(0, -'.vercel.app'.length);
+  const parts = name.split('-');
+  // Unique URLs are `{project}-{hash}-{team}`. The hash is 8–12 alphanumeric and
+  // always contains a digit, which is what distinguishes `36d5cpba9` from `developer`.
+  for (let i = 1; i < parts.length - 1; i += 1) {
+    const hash = parts[i];
+    if (hash.length >= 8 && hash.length <= 12 && /\d/.test(hash) && /^[a-z0-9]+$/i.test(hash)) {
+      const project = parts.slice(0, i).join('-');
+      if (project) return `${project}.vercel.app`;
+    }
+  }
+  return host;
 }
 
 /**
@@ -76,21 +100,27 @@ export function otherOrigin(req) {
   const override = (process.env.PREVIEW_FRAME_ORIGIN || '').replace(/\/$/, '');
   const proto = requestProto(req);
   const { hostname, port } = parseHostHeader(requestHost(req));
-  const here = `${proto}://${withPort(hostname, port)}`;
 
   if (hostname === 'localhost') return `${proto}://${withPort('127.0.0.1', port)}`;
   if (hostname === '127.0.0.1') return `${proto}://${withPort('localhost', port)}`;
 
+  if (override) {
+    const overrideHost = override.replace(/^https?:\/\//, '');
+    if (overrideHost && overrideHost !== hostname) {
+      return override.startsWith('http') ? override : `https://${overrideHost}`;
+    }
+  }
+
   const production = productionHost();
-  const deployment = (process.env.VERCEL_URL || '').replace(/\/$/, '');
+  const alias = publicDeploymentHost(process.env.VERCEL_URL);
 
-  if (override && override !== here) return override;
-
-  if ((hostname === deployment || hostname.endsWith('.vercel.app')) && production) {
+  // *.vercel.app frames the custom domain. Custom domains frame the public alias,
+  // never the unique deployment URL (that one is SSO-protected).
+  if (hostname.endsWith('.vercel.app')) {
     return `https://${production}`;
   }
-  if (deployment && hostname !== deployment) {
-    return `https://${deployment}`;
+  if (alias) {
+    return `https://${alias}`;
   }
   if (hostname.startsWith('www.')) return `${proto}://${withPort(hostname.slice(4), port)}`;
   return `${proto}://${withPort(`www.${hostname}`, port)}`;

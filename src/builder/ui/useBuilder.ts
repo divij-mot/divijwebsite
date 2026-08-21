@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { randomId } from '../core/hash';
 import { PROJECT_SCHEMA_VERSION } from '../core/limits';
+import { extractOversizedMarkup, safeUploadName } from '../core/pastedAssets';
 import type {
   AgentStatus,
   ChatMessage,
@@ -32,6 +33,15 @@ import { downloadZip, exportZip, importZip } from '../transfer/zip';
 
 const LAST_PROJECT_KEY = 'last-project-id';
 const MAX_LOG_LINES = 2000;
+
+function utf8ToBase64(content: string): string {
+  const bytes = new TextEncoder().encode(content);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 export type SandboxPhase = 'none' | 'creating' | 'hydrating' | 'ready' | 'error';
 
@@ -134,12 +144,20 @@ export function useBuilder() {
                 return;
               }
               attempts += 1;
-              if (attempts >= 40) {
-                stopPreviewPoll();
+              if (attempts === 40) {
+                // Do not leave the overlay up forever. First compile can take a few
+                // minutes; the iframe is already loading and will paint when Next answers.
+                patch({
+                  preview: { ...next, ready: true, warning: next.warning },
+                  previewStarting: false,
+                });
                 log(
                   'system',
-                  'The app server still has not answered. First compile can take a while — hit refresh in the preview bar.',
+                  'The app is still compiling. Showing the preview anyway — hit refresh if it stays blank.',
                 );
+              }
+              if (attempts >= 80) {
+                stopPreviewPoll();
                 return;
               }
               tick();
@@ -601,9 +619,9 @@ export function useBuilder() {
   // -------------------------------------------------------------------------
 
   const sendPrompt = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, files?: { name: string; content: string }[]) => {
       const project = projectRef.current;
-      if (!project || !prompt.trim()) return;
+      if (!project) return;
       if (project.readOnly) {
         patch({ error: 'This project is read-only because it is open in another tab.' });
         return;
@@ -613,25 +631,60 @@ export function useBuilder() {
         return;
       }
 
+      const uploaded: string[] = [];
+      for (const file of files ?? []) {
+        const path = `uploads/${safeUploadName(file.name)}`;
+        await project.writeFile({ path, content: file.content });
+        uploaded.push(path);
+      }
+      const extracted = extractOversizedMarkup(prompt);
+      if (extracted.file) {
+        await project.writeFile(extracted.file);
+        uploaded.push(extracted.file.path);
+      }
+      let text = extracted.prompt.trim();
+      if (uploaded.length) {
+        text = [text || 'Use the attached file(s).', '', 'Attached files:', ...uploaded.map((p) => `- ${p}`)].join(
+          '\n',
+        );
+      }
+      if (!text) return;
+
       const lease = await ensureSandbox();
       if (!lease) return;
+
+      if (uploaded.length && leaseRef.current) {
+        await api
+          .callTool({
+            workspaceId: lease.workspaceId,
+            tool: 'fs.sync',
+            args: {
+              files: await Promise.all(
+                uploaded.map(async (path) => ({
+                  path,
+                  content_base64: utf8ToBase64(await project.readFile(path)),
+                })),
+              ),
+            },
+          })
+          .catch(() => {});
+      }
 
       const message: ChatMessage = {
         id: randomId('msg'),
         role: 'user',
-        content: prompt.trim(),
+        content: text,
         createdAt: Date.now(),
       };
       await project.appendMessage(message);
-      // Checkpoint before the turn, so the user can always get back to this exact state.
-      await project.createCheckpoint('pre-turn', prompt.trim().slice(0, 60));
+      await project.createCheckpoint('pre-turn', text.slice(0, 60));
       await refreshProject();
 
       patch({ busy: 'Working', error: null, streamingText: '', streamingToolEvents: [] });
 
       send({
         type: 'start-turn',
-        prompt: prompt.trim(),
+        prompt: text,
         workspaceId: lease.workspaceId,
         manifest: project.manifest,
         history: [...project.chat].slice(0, -1),

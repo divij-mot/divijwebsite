@@ -8,6 +8,7 @@ import {
   mosaicPreviewTarget,
   otherOrigin,
   previewIdFromUrl,
+  publicDeploymentHost,
   rewriteGuestHtml,
   rewriteLocation,
 } from '../../../api/_lib/previewFrame.js';
@@ -40,15 +41,29 @@ describe('sibling origin', () => {
     expect(otherOrigin(req('127.0.0.1:4186'))).toBe('http://localhost:4186');
   });
 
-  it('pairs a custom domain with the Vercel deployment host', () => {
-    const prev = process.env.VERCEL_URL;
-    process.env.VERCEL_URL = 'divij-website-abc.vercel.app';
+  it('strips the unique deployment suffix so the iframe hits the public alias', () => {
+    expect(
+      publicDeploymentHost('divijwebsite-36d5cpba9-developer-x-xs-projects.vercel.app'),
+    ).toBe('divijwebsite.vercel.app');
+    expect(publicDeploymentHost('divijwebsite.vercel.app')).toBe('divijwebsite.vercel.app');
+    expect(publicDeploymentHost('my-cool-app-a1b2c3d4e5-acme.vercel.app')).toBe('my-cool-app.vercel.app');
+  });
+
+  it('pairs a custom domain with the public Vercel alias, not the SSO-protected unique URL', () => {
+    const prevUrl = process.env.VERCEL_URL;
+    const prevProd = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    process.env.VERCEL_URL = 'divijwebsite-36d5cpba9-developer-x-xs-projects.vercel.app';
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = 'www.divijmotwani.com';
     try {
-      expect(otherOrigin(req('divijmotwani.com', { headers: { 'x-forwarded-proto': 'https' } }))).toBe(
-        'https://divij-website-abc.vercel.app',
+      expect(otherOrigin(req('www.divijmotwani.com', { headers: { 'x-forwarded-proto': 'https' } }))).toBe(
+        'https://divijwebsite.vercel.app',
       );
+      expect(
+        otherOrigin(req('divijwebsite.vercel.app', { headers: { 'x-forwarded-proto': 'https' } })),
+      ).toBe('https://www.divijmotwani.com');
     } finally {
-      process.env.VERCEL_URL = prev;
+      process.env.VERCEL_URL = prevUrl;
+      process.env.VERCEL_PROJECT_PRODUCTION_URL = prevProd;
     }
   });
 

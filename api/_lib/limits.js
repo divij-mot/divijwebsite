@@ -22,7 +22,7 @@ export const SANDBOX_LIMITS = {
   ttlSeconds: 2 * 60 * 60,
   maxUploadChunkBytes: 6 * 1024 * 1024,
   devPort: 3000,
-  previewExpirySeconds: 15 * 60,
+  previewExpirySeconds: 2 * 60 * 60,
 };
 
 export const TIMEOUTS_MS = {

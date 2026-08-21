@@ -3,8 +3,9 @@
  * DELETE /api/builder/workspaces/preview -- revoke it immediately
  *
  * A preview is a public capability URL: anyone holding it can reach the app. That is
- * acceptable for a 15-minute window on a disposable sandbox, and it is why the URL is
- * revoked on destroy rather than left to expire.
+ * the join link for a sandbox-backed multiplayer game. It is requested for the sandbox
+ * lifetime (with a 15-minute fallback if Mosaic rejects the longer TTL) and revoked on
+ * destroy rather than left to expire.
  *
  * Playwright verification does not use this. Tests hit http://127.0.0.1:3000 inside the
  * guest, so an app under test is never exposed publicly just to be checked.

@@ -30,7 +30,8 @@ export const SANDBOX_LIMITS = {
   /** Mosaic caps a single files-API write at 8 MiB; stay clear of the boundary. */
   maxUploadChunkBytes: 6 * 1024 * 1024,
   devPort: 3000,
-  previewExpirySeconds: 15 * 60,
+  /** Public player link. Match the sandbox so a multiplayer game is not killed at 15 minutes. */
+  previewExpirySeconds: 2 * 60 * 60,
 } as const;
 
 export const TIMEOUTS_MS = {

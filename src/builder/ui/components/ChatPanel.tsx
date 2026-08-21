@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import type { AgentStatus, ChatMessage, ToolEventSummary } from '../../core/types';
+import { extractOversizedMarkup } from '../../core/pastedAssets';
 import { Markdown } from './Markdown';
 
 function ToolRow({ event }: { event: ToolEventSummary }) {
@@ -136,13 +137,14 @@ export interface ChatPanelProps {
   busy: boolean;
   disabled: boolean;
   disabledReason?: string;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, files?: { name: string; content: string }[]) => void;
   onCancel: () => void;
   onTakeControl?: () => void;
 }
 
 export function ChatPanel(props: ChatPanelProps) {
   const [draft, setDraft] = useState('');
+  const [pending, setPending] = useState<{ name: string; content: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pinnedRef = useRef(true);
@@ -162,9 +164,11 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const submit = () => {
     const value = draft.trim();
-    if (!value || props.busy || props.disabled) return;
-    props.onSend(value);
+    if (props.busy || props.disabled) return;
+    if (!value && pending.length === 0) return;
+    props.onSend(value || 'Use the attached file(s).', pending);
     setDraft('');
+    setPending([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -237,6 +241,26 @@ export function ChatPanel(props: ChatPanelProps) {
             )}
           </div>
         )}
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {pending.map((file, i) => (
+              <span
+                key={`${file.name}-${i}`}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-400"
+              >
+                {file.name}
+                <button
+                  type="button"
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() => setPending((p) => p.filter((_, j) => j !== i))}
+                  className="text-neutral-600 hover:text-neutral-300"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="relative rounded-xl border border-neutral-800 bg-neutral-900 focus-within:border-neutral-700">
           <textarea
             ref={textareaRef}
@@ -246,6 +270,14 @@ export function ChatPanel(props: ChatPanelProps) {
               setDraft(e.target.value);
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+            }}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData('text');
+              const extracted = extractOversizedMarkup((draft ? `${draft}\n\n` : '') + text);
+              if (!extracted.file) return;
+              e.preventDefault();
+              setPending((p) => [...p, { name: extracted.file!.path.replace(/^uploads\//, ''), content: extracted.file!.content }]);
+              setDraft(extracted.instructions);
             }}
             onKeyDown={(e) => {
               // Enter sends; Shift+Enter is a newline. Matches every chat UI people
@@ -262,7 +294,7 @@ export function ChatPanel(props: ChatPanelProps) {
           <button
             type="button"
             onClick={props.busy ? props.onCancel : submit}
-            disabled={props.disabled || (!props.busy && !draft.trim())}
+            disabled={props.disabled || (!props.busy && !draft.trim() && pending.length === 0)}
             aria-label={props.busy ? 'Stop' : 'Send'}
             className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-25"
           >
