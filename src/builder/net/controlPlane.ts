@@ -52,9 +52,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    // A 404 from our own API means the serverless functions are not being served, which
+    // happens when the app is run with `vite` instead of `vercel dev`. Saying "not found"
+    // would send someone hunting for a bug in their invite code.
+    const message =
+      res.status === 404 && !body.error
+        ? 'The builder API is not responding. If you are running locally, use `vercel dev` rather than `vite` so /api routes are served.'
+        : String(body.message || body.error || `Request failed with ${res.status}`);
+
     throw new ControlPlaneError(
-      String(body.message || body.error || `Request failed with ${res.status}`),
-      String(body.error || 'unknown'),
+      message,
+      String(body.error || (res.status === 404 ? 'api_unavailable' : 'unknown')),
       res.status,
       Boolean(body.retryable) || res.status >= 500 || res.status === 429,
     );
