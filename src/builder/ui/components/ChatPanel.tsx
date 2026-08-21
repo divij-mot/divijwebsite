@@ -138,6 +138,7 @@ export interface ChatPanelProps {
   disabledReason?: string;
   onSend: (prompt: string) => void;
   onCancel: () => void;
+  onTakeControl?: () => void;
 }
 
 export function ChatPanel(props: ChatPanelProps) {
@@ -223,7 +224,18 @@ export function ChatPanel(props: ChatPanelProps) {
 
       <div className="border-t border-neutral-800 p-3">
         {props.disabled && props.disabledReason && (
-          <p className="mb-2 text-xs text-amber-500">{props.disabledReason}</p>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <p className="text-xs text-amber-500">{props.disabledReason}</p>
+            {props.onTakeControl && (
+              <button
+                type="button"
+                onClick={() => props.onTakeControl?.()}
+                className="shrink-0 rounded-md border border-amber-800/80 px-2 py-0.5 text-[11px] text-amber-200 hover:bg-amber-950/50"
+              >
+                Take control
+              </button>
+            )}
+          </div>
         )}
         <div className="relative rounded-xl border border-neutral-800 bg-neutral-900 focus-within:border-neutral-700">
           <textarea

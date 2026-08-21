@@ -55,6 +55,7 @@ export interface BuilderState {
   sandboxPhase: SandboxPhase;
   lease: WorkspaceLease | null;
   preview: PreviewInfo | null;
+  previewStarting: boolean;
   checkpoints: Checkpoint[];
   providerSettings: ProviderSettings | null;
   hasApiKey: boolean;
@@ -79,6 +80,7 @@ export function useBuilder() {
     sandboxPhase: 'none',
     lease: null,
     preview: null,
+    previewStarting: false,
     checkpoints: [],
     providerSettings: null,
     hasApiKey: false,
@@ -94,6 +96,7 @@ export function useBuilder() {
   const leaseRef = useRef<WorkspaceLease | null>(null);
   const streamingIdRef = useRef<string | null>(null);
   const probedPreviewUrlRef = useRef<string | null>(null);
+  const previewPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const patch = useCallback((next: Partial<BuilderState>) => {
     setState((prev) => ({ ...prev, ...next }));
@@ -106,6 +109,49 @@ export function useBuilder() {
     });
   }, []);
 
+  const stopPreviewPoll = useCallback(() => {
+    if (previewPollRef.current != null) {
+      clearTimeout(previewPollRef.current);
+      previewPollRef.current = null;
+    }
+  }, []);
+
+  const watchUntilLive = useCallback(
+    (workspaceId: string, preview: PreviewInfo & { ready: boolean }) => {
+      stopPreviewPoll();
+      if (preview.ready) return;
+      let attempts = 0;
+      const tick = () => {
+        previewPollRef.current = setTimeout(() => {
+          void api
+            .probePreview(workspaceId)
+            .then((next) => {
+              if (leaseRef.current?.workspaceId !== workspaceId) return;
+              if (next.ready && next.url) {
+                stopPreviewPoll();
+                patch({ preview: next, previewStarting: false });
+                log('system', 'Live preview is up.');
+                return;
+              }
+              attempts += 1;
+              if (attempts >= 40) {
+                stopPreviewPoll();
+                log(
+                  'system',
+                  'The app server still has not answered. First compile can take a while — hit refresh in the preview bar.',
+                );
+                return;
+              }
+              tick();
+            })
+            .catch(() => tick());
+        }, 3000);
+      };
+      tick();
+    },
+    [log, patch, stopPreviewPoll],
+  );
+
   const refreshProject = useCallback(async () => {
     const project = projectRef.current;
     if (!project) return;
@@ -117,6 +163,19 @@ export function useBuilder() {
       readOnly: project.readOnly,
     });
   }, [patch]);
+
+  const watchStolen = useCallback(
+    (project: ProjectStore) => {
+      void project.lockStolen.then(() => {
+        if (projectRef.current !== project) return;
+        patch({
+          readOnly: true,
+          notice: 'Another tab took control. This one is now read-only.',
+        });
+      });
+    },
+    [patch],
+  );
 
   // -------------------------------------------------------------------------
   // Worker
@@ -186,10 +245,21 @@ export function useBuilder() {
 
         case 'preview-invalidated':
           if (leaseRef.current) {
+            patch({ previewStarting: true });
+            log('system', 'Minting a preview URL…');
             api
               .startPreview(leaseRef.current.workspaceId)
-              .then((preview) => patch({ preview }))
-              .catch(() => {});
+              .then((preview) => {
+                patch({ preview, previewStarting: false });
+                const id = leaseRef.current?.workspaceId;
+                if (id) watchUntilLive(id, preview);
+              })
+              .catch((err) =>
+                patch({
+                  previewStarting: false,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
           }
           break;
 
@@ -226,7 +296,8 @@ export function useBuilder() {
           break;
 
         case 'sandbox-expired':
-          patch({ sandboxPhase: 'none', lease: null, preview: null });
+          stopPreviewPoll();
+          patch({ sandboxPhase: 'none', lease: null, preview: null, previewStarting: false });
           leaseRef.current = null;
           log('system', 'The sandbox expired. Rebuilding it from your local copy.');
           break;
@@ -251,7 +322,7 @@ export function useBuilder() {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [log, patch, refreshProject]);
+  }, [log, patch, refreshProject, stopPreviewPoll, watchUntilLive]);
 
   // -------------------------------------------------------------------------
   // Bootstrap
@@ -272,6 +343,7 @@ export function useBuilder() {
           projectRef.current = project;
           patch({ project });
           await refreshProject();
+          watchStolen(project);
           if (project.readOnly) {
             patch({ notice: 'This project is open in another tab, so this one is read-only.' });
           }
@@ -280,14 +352,14 @@ export function useBuilder() {
         }
       }
     })();
-  }, [patch, refreshProject]);
+  }, [patch, refreshProject, watchStolen]);
 
-  // An in-memory preview from before the embeddable probe existed has no flag. Reuse the
-  // URL (do not rotate it) so the pane can switch from a white iframe to the fallback.
+  // An in-memory preview from before frame_url existed has no sibling-origin URL.
+  // Reuse the Mosaic preview (do not rotate it) so the pane can load the proxy.
   useEffect(() => {
     const lease = leaseRef.current;
     const preview = state.preview;
-    if (!lease || !preview || typeof preview.embeddable === 'boolean') return;
+    if (!lease || !preview || preview.frameUrl) return;
     if (probedPreviewUrlRef.current === preview.url) return;
     probedPreviewUrlRef.current = preview.url;
     void api
@@ -305,11 +377,13 @@ export function useBuilder() {
       projectRef.current?.close();
       projectRef.current = project;
       await db.setSetting(LAST_PROJECT_KEY, project.projectId);
-      patch({ project, sandboxPhase: 'none', lease: null, preview: null, logs: [] });
+      patch({ project, sandboxPhase: 'none', lease: null, preview: null, previewStarting: false, logs: [] });
       leaseRef.current = null;
+      stopPreviewPoll();
+      watchStolen(project);
       await refreshProject();
     },
-    [patch, refreshProject],
+    [patch, refreshProject, stopPreviewPoll, watchStolen],
   );
 
   const createProject = useCallback(
@@ -450,7 +524,7 @@ export function useBuilder() {
       }
 
       patch({ sandboxPhase: 'ready' });
-      log('system', 'Sandbox ready.');
+      log('system', 'Sandbox ready. Waiting for the app server before a preview link exists.');
       return lease;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -467,20 +541,60 @@ export function useBuilder() {
     patch({ busy: 'Destroying the sandbox' });
     await api.destroyWorkspace(lease.workspaceId).catch(() => {});
     leaseRef.current = null;
-    patch({ lease: null, preview: null, sandboxPhase: 'none', busy: null });
+    stopPreviewPoll();
+    patch({ lease: null, preview: null, previewStarting: false, sandboxPhase: 'none', busy: null });
     log('system', 'Sandbox destroyed. Your project is safe locally.');
-  }, [log, patch]);
+  }, [log, patch, stopPreviewPoll]);
 
   const refreshPreview = useCallback(async () => {
     const lease = leaseRef.current;
     if (!lease) return;
+    stopPreviewPoll();
+    patch({ previewStarting: true, error: null });
     try {
       const preview = await api.startPreview(lease.workspaceId, true);
-      patch({ preview });
+      patch({ preview, previewStarting: false });
+      if (preview.warning) log('system', preview.warning);
+      watchUntilLive(lease.workspaceId, preview);
     } catch (err) {
-      patch({ error: err instanceof Error ? err.message : String(err) });
+      patch({
+        previewStarting: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-  }, [patch]);
+  }, [log, patch, stopPreviewPoll, watchUntilLive]);
+
+  const takeControl = useCallback(async () => {
+    const project = projectRef.current;
+    if (!project) return;
+    patch({ busy: 'Taking control', error: null });
+    try {
+      const id = project.projectId;
+      const next = await ProjectStore.open(id, { steal: true });
+      if (next.readOnly) {
+        next.close();
+        patch({
+          busy: null,
+          error: 'Could not take control. Close the other tab, then try again.',
+        });
+        return;
+      }
+      project.close();
+      projectRef.current = next;
+      await db.setSetting(LAST_PROJECT_KEY, id);
+      watchStolen(next);
+      patch({
+        project: next,
+        readOnly: false,
+        busy: null,
+        error: null,
+        notice: 'This tab is now the editor.',
+      });
+      await refreshProject();
+    } catch (err) {
+      patch({ busy: null, error: err instanceof Error ? err.message : String(err) });
+    }
+  }, [patch, refreshProject, watchStolen]);
 
   // -------------------------------------------------------------------------
   // Agent
@@ -647,6 +761,7 @@ export function useBuilder() {
       ensureSandbox,
       destroySandbox,
       refreshPreview,
+      takeControl,
       sendPrompt,
       cancelTurn,
       configureProvider,
@@ -674,6 +789,7 @@ export function useBuilder() {
       saveFile,
       sendPrompt,
       signIn,
+      takeControl,
     ],
   );
 

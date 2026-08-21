@@ -12,7 +12,7 @@
 
 import { SANDBOX_LIMITS } from '../../_lib/limits.js';
 import * as mosaic from '../../_lib/mosaic.js';
-import { previewEmbeddable } from '../../_lib/previewEmbed.js';
+import { otherOrigin, previewIdFromUrl, previewUrlReachable } from '../../_lib/previewFrame.js';
 import {
   HttpError,
   assertSameOrigin,
@@ -28,6 +28,21 @@ export const config = { runtime: 'nodejs', maxDuration: 120 };
 
 /** Rotate slightly before expiry so the iframe never shows an expired-preview page. */
 const RENEW_MARGIN_MS = 90_000;
+
+function previewPayload(req, { url, expiresAt, port, previewId, ready, reused, warning }) {
+  const frameToken = previewIdFromUrl(url);
+  const frameOrigin = otherOrigin(req);
+  return {
+    url,
+    expires_at: expiresAt,
+    port,
+    preview_id: previewId || frameToken,
+    frame_url: frameToken ? `${frameOrigin}/__p/${frameToken}/` : null,
+    reused: Boolean(reused),
+    ...(ready === undefined ? {} : { ready }),
+    ...(warning ? { warning } : {}),
+  };
+}
 
 export default async function handler(req, res) {
   try {
@@ -58,34 +73,75 @@ export default async function handler(req, res) {
       throw new HttpError(400, 'port_not_allowed', `Only port ${SANDBOX_LIMITS.devPort} can be previewed.`);
     }
 
+    if (body.probe) {
+      const existing = await store.recallPreview(body.workspace_id);
+      if (!existing?.url) {
+        return sendJson(
+          res,
+          200,
+          previewPayload(req, {
+            url: '',
+            expiresAt: 0,
+            port,
+            previewId: '',
+            ready: false,
+            warning: 'No preview has been minted yet.',
+          }),
+        );
+      }
+      const live = await previewUrlReachable(existing.url);
+      return sendJson(
+        res,
+        200,
+        previewPayload(req, {
+          url: existing.url,
+          expiresAt: existing.expiresAt,
+          port,
+          previewId: existing.previewId,
+          reused: true,
+          ready: live,
+          warning: live
+            ? undefined
+            : 'The app is still compiling. The preview URL is open; this overlay clears when Next.js answers.',
+        }),
+      );
+    }
+
     const existing = await store.recallPreview(body.workspace_id);
     if (existing && existing.expiresAt - Date.now() > RENEW_MARGIN_MS && !body.force) {
-      const ready = await mosaic.previewReady(lease.sandboxId, existing.previewId).catch(() => ({ ready: false }));
-      if (ready.ready && existing.url) {
-        const embeddable = await previewEmbeddable(existing.url);
-        return sendJson(res, 200, {
+      const live = existing.url ? await previewUrlReachable(existing.url) : false;
+      return sendJson(
+        res,
+        200,
+        previewPayload(req, {
           url: existing.url,
-          expires_at: existing.expiresAt,
+          expiresAt: existing.expiresAt,
           port,
+          previewId: existing.previewId,
           reused: true,
-          embeddable,
-        });
-      }
+          ready: live,
+          warning: live
+            ? undefined
+            : 'The app is still compiling. The preview URL is open; this overlay clears when Next.js answers.',
+        }),
+      );
     }
 
     if (existing?.previewId) {
       await mosaic.revokePreview(lease.sandboxId, existing.previewId).catch(() => {});
     }
 
-    const preview = await mosaic.createPreview(lease.sandboxId, port, SANDBOX_LIMITS.previewExpirySeconds);
+    let preview = await mosaic.createPreview(lease.sandboxId, port, SANDBOX_LIMITS.previewExpirySeconds);
     const expiresAt = Math.round(Number(preview.expires_at_ns) / 1e6);
 
+    // Mosaic can list the preview as ready before Next.js has compiled. Wait a few
+    // seconds, then return the URL anyway so the client can keep probing.
     let ready = false;
-    for (let i = 0; i < 25; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       const r = await mosaic.previewReady(lease.sandboxId, preview.id).catch(() => ({ ready: false }));
       if (r.ready) {
-        ready = true;
-        break;
+        ready = await previewUrlReachable(preview.url);
+        if (ready) break;
       }
       await new Promise((resolve) => setTimeout(resolve, 800));
     }
@@ -98,18 +154,21 @@ export default async function handler(req, res) {
       24 * 60 * 60,
     );
 
-    const embeddable = await previewEmbeddable(preview.url);
-    return sendJson(res, 200, {
-      url: preview.url,
-      expires_at: expiresAt,
-      port,
-      ready,
-      reused: false,
-      embeddable,
-      ...(ready
-        ? {}
-        : { warning: 'The preview URL exists but the dev server has not answered yet. It may still be starting.' }),
-    });
+    return sendJson(
+      res,
+      200,
+      previewPayload(req, {
+        url: preview.url,
+        expiresAt,
+        port,
+        previewId: preview.id,
+        ready,
+        reused: false,
+        warning: ready
+          ? undefined
+          : 'The app is still compiling. The preview URL is open; this overlay clears when Next.js answers.',
+      }),
+    );
   } catch (err) {
     return sendError(res, err);
   }

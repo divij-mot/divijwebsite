@@ -21,10 +21,11 @@
  * whole builder tab to a phishing page. Camera, microphone, clipboard, and the rest are
  * denied through the empty `allow` attribute and the route's Permissions-Policy.
  *
- * Mosaic currently sends `X-Frame-Options: DENY` and `frame-ancestors 'none'` on preview
- * URLs (copied from the control-plane app). When that is detected the pane does not
- * render an iframe at all -- a blank white rectangle looks like our bug. The same URL
- * still works in a top-level tab.
+ * Mosaic currently sends `X-Frame-Options: DENY` on preview URLs, so the iframe does
+ * not point at Mosaic directly. It loads a sibling-origin reverse proxy (`localhost` ↔
+ * `127.0.0.1` locally, custom domain ↔ `*.vercel.app` in production) that strips those
+ * headers. That origin split is also why `allow-same-origin` cannot reach the builder:
+ * the frame's origin is never the parent's.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -42,11 +43,20 @@ const VIEWPORTS = {
 export interface PreviewPanelProps {
   preview: PreviewInfo | null;
   sandboxPhase: SandboxPhase;
+  previewStarting?: boolean;
+  agentBusy?: boolean;
   onRefresh: () => void;
   onStart: () => void;
 }
 
-export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: PreviewPanelProps) {
+export function PreviewPanel({
+  preview,
+  sandboxPhase,
+  previewStarting = false,
+  agentBusy = false,
+  onRefresh,
+  onStart,
+}: PreviewPanelProps) {
   const [viewport, setViewport] = useState<keyof typeof VIEWPORTS>('desktop');
   const [reloadKey, setReloadKey] = useState(0);
   const [expiresIn, setExpiresIn] = useState<number | null>(null);
@@ -69,11 +79,12 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
   }, [expiresIn, onRefresh]);
 
   const width = VIEWPORTS[viewport].width;
-  const canEmbed = preview?.embeddable !== false;
-  const frameSrc = useMemo(
-    () => (preview && canEmbed ? `${preview.url}${preview.url.includes('?') ? '&' : '?'}__r=${reloadKey}` : ''),
-    [preview, canEmbed, reloadKey],
-  );
+  const frameSrc = useMemo(() => {
+    if (!preview) return '';
+    const base = preview.frameUrl || preview.url;
+    const join = base.includes('?') ? '&' : '?';
+    return `${base}${join}__r=${reloadKey}`;
+  }, [preview, reloadKey]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-neutral-950">
@@ -101,21 +112,24 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
           {expiresIn !== null && (
             <span
               className={`tabular-nums text-[11px] ${expiresIn < 120 ? 'text-amber-500' : 'text-neutral-600'}`}
-              title="The preview URL rotates automatically before it expires."
+              title="Public preview link — 15 minutes. The sandbox lasts 2 hours, and your project is saved locally. This timer rotates the link, not the project."
             >
               {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, '0')}
             </span>
           )}
           <button
             type="button"
-            onClick={() => setReloadKey((k) => k + 1)}
-            disabled={!preview}
-            title="Reload"
+            onClick={() => {
+              setReloadKey((k) => k + 1);
+              onRefresh();
+            }}
+            disabled={!preview && sandboxPhase !== 'ready'}
+            title="Mint a fresh preview URL"
             className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 disabled:opacity-30"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
-          {preview && (
+          {preview && preview.ready !== false && (
             <a
               href={preview.url}
               target="_blank"
@@ -129,44 +143,68 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-900/40 p-3">
-        {preview && !canEmbed ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="text-sm text-neutral-200">Preview is ready in a new tab</p>
-            <p className="max-w-sm text-xs leading-relaxed text-neutral-500">
-              Mosaic is sending headers that refuse to be framed, so this pane cannot show the
-              app. The same URL works when opened on its own.
-            </p>
-            <a
-              href={preview.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-200"
-            >
-              Open live preview
-            </a>
-          </div>
-        ) : preview ? (
-          <iframe
-            key={frameSrc}
-            ref={frameRef}
-            src={frameSrc}
-            title="App preview"
-            // See the file header for why same-origin is safe here and top navigation is not.
-            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            allow=""
-            className="h-full rounded-lg border border-neutral-800 bg-white shadow-2xl"
-            style={{ width: width ? `${width}px` : '100%', maxWidth: '100%' }}
-          />
+      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-900/40 p-3">
+        {preview ? (
+          <>
+            <iframe
+              key={frameSrc}
+              ref={frameRef}
+              src={previewStarting || preview.ready === false ? 'about:blank' : frameSrc}
+              title="App preview"
+              // See the file header for why same-origin is safe here and top navigation is not.
+              sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-popups-to-escape-sandbox"
+              referrerPolicy="no-referrer"
+              allow=""
+              className="h-full rounded-lg border border-neutral-800 bg-white shadow-2xl"
+              style={{ width: width ? `${width}px` : '100%', maxWidth: '100%' }}
+            />
+            {(previewStarting || preview.ready === false) && (
+              <div className="absolute inset-3 flex flex-col items-center justify-center gap-2 rounded-lg bg-neutral-950/80 text-center">
+                <Loader2 className="h-5 w-5 animate-spin text-neutral-500" />
+                <p className="text-xs text-neutral-400">Waiting for the app to compile…</p>
+                <p className="max-w-xs text-[11px] text-neutral-600">
+                  {preview.warning ||
+                    'Mosaic opened a public URL. Next.js inside the sandbox has not served a page yet — first compile often takes a minute. Checking again automatically.'}
+                </p>
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            {sandboxPhase === 'creating' || sandboxPhase === 'hydrating' ? (
+            {sandboxPhase === 'creating' || sandboxPhase === 'hydrating' || previewStarting ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin text-neutral-600" />
-                <p className="text-xs text-neutral-500">
-                  {sandboxPhase === 'creating' ? 'Starting a sandbox' : 'Loading your project into it'}
+                <p className="text-xs text-neutral-400">
+                  {previewStarting
+                    ? 'Starting the live preview'
+                    : sandboxPhase === 'creating'
+                      ? 'Starting a sandbox'
+                      : 'Loading your project into it'}
                 </p>
+                <p className="max-w-xs text-[11px] text-neutral-600">
+                  {previewStarting
+                    ? 'A preview URL is being minted. This can take a few seconds after Mosaic says the sandbox is ready.'
+                    : 'This is working — the preview link appears once the app server is up.'}
+                </p>
+              </>
+            ) : sandboxPhase === 'ready' ? (
+              <>
+                <Loader2 className={`h-5 w-5 ${agentBusy ? 'animate-spin text-neutral-600' : 'text-neutral-700'}`} />
+                <p className="text-xs text-neutral-400">Sandbox ready. Waiting for the live preview.</p>
+                <p className="max-w-xs text-[11px] text-neutral-600">
+                  {agentBusy
+                    ? 'The sandbox is up. The preview link appears as soon as the app server starts — this is still working.'
+                    : 'The sandbox is up. Start the preview once the app is running, or ask the agent to start the dev server.'}
+                </p>
+                {!agentBusy && (
+                  <button
+                    type="button"
+                    onClick={onStart}
+                    className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                  >
+                    Start preview
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -176,7 +214,7 @@ export function PreviewPanel({ preview, sandboxPhase, onRefresh, onStart }: Prev
                   onClick={onStart}
                   className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
                 >
-                  Start the dev server
+                  Start preview
                 </button>
               </>
             )}

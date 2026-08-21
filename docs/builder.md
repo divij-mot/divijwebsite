@@ -115,16 +115,18 @@ injected as HTML, and links are restricted to http(s). The `/builder` route ship
 that permits no third-party scripts.
 
 **The preview iframe.** Sandboxed with `allow-scripts allow-forms allow-modals
-allow-popups allow-downloads` and `allow-same-origin`. Same-origin is safe here because
-the preview is served from `sandbox.mosaicos.com` and can never share an origin with the
-builder; without it a Next.js app gets an opaque origin, `localStorage` throws, and the
-frame hydrates to a blank page. Top navigation is withheld so a generated page cannot
-redirect the builder tab.
+allow-popups allow-downloads` and `allow-same-origin`. Mosaic preview URLs currently
+send `X-Frame-Options: DENY`, so the pane does not load them directly. The control plane
+reverse-proxies the guest through a **sibling origin** (`localhost` ↔ `127.0.0.1`
+locally, custom domain ↔ the deployment's `*.vercel.app` in production) and strips those
+headers. Guest HTML is rewritten so `/_next` assets stay under `/__p/<preview-token>/`,
+because Chrome treats the two hosts as different sites and will not send a cookie from
+the iframe. Same-origin on the iframe is then safe because the frame's origin is never
+the builder's; without it a Next.js app gets an opaque origin and hydrates to a blank
+page. Top navigation is withheld so a generated page cannot redirect the builder tab.
 
-Mosaic currently copies the control-plane `X-Frame-Options: DENY` and
-`frame-ancestors 'none'` onto preview responses. The control plane probes those headers
-and the pane falls back to "open in a new tab" instead of showing a white iframe. When
-Mosaic stops sending them, the iframe is used again.
+The rest of the site uses a COI service worker so FFmpeg can use `SharedArrayBuffer`.
+That isolation is skipped on `/builder`, because it would block the preview iframe.
 
 ### Why the headers in `vercel.json` are what they are
 
@@ -138,8 +140,9 @@ only page that renders untrusted model output and embeds a sandbox preview:
   calls directly with a user's own key (currently DeepSeek). A custom endpoint therefore
   needs adding here as well as in Settings — a deliberate friction, since it is the one
   case where a key leaves for a host we do not control.
-- `frame-src` allows only the Mosaic preview origin, so a generated page cannot embed
-  anything else.
+- `frame-src` allows the sibling origins the preview proxy uses (`127.0.0.1` / `localhost`,
+  `*.vercel.app`, and this site's domains) plus Mosaic, so a generated page cannot embed
+  an arbitrary third party.
 - `frame-ancestors 'none'` and `X-Frame-Options: DENY` keep the builder itself out of
   someone else's frame, which would otherwise enable clickjacking against a session.
 - `wasm-unsafe-eval` is present because the site's FFmpeg tooling needs WebAssembly; plain

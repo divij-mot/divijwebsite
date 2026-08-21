@@ -19,7 +19,7 @@ import type {
   TreeManifest,
 } from '../core/types';
 import * as db from './db';
-import { acquireProjectLock, type ProjectLock } from './lock';
+import { acquireProjectLock, type AcquireLockOptions, type ProjectLock } from './lock';
 import { getBlobStore } from './opfs';
 
 const decoder = new TextDecoder();
@@ -50,8 +50,8 @@ export class ProjectStore {
     this.tree = tree;
   }
 
-  static async open(projectId: string): Promise<ProjectStore> {
-    const lock = await acquireProjectLock(projectId);
+  static async open(projectId: string, options: AcquireLockOptions = {}): Promise<ProjectStore> {
+    const lock = await acquireProjectLock(projectId, options);
     const record = await db.getProject(projectId);
     if (!record) throw new Error(`project ${projectId} not found`);
     const tree = (await db.getTree(projectId)) ?? {
@@ -76,6 +76,11 @@ export class ProjectStore {
 
   get readOnly(): boolean {
     return this.lock.state === 'reader';
+  }
+
+  /** Resolves when another tab takes the writer lock from this one. */
+  get lockStolen(): Promise<void> {
+    return this.lock.stolen;
   }
 
   get manifest(): ProjectManifest {

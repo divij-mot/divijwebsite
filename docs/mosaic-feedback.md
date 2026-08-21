@@ -138,6 +138,8 @@ that the guest never set. The URL renders correctly in a top-level tab and is bl
 cross-origin iframe, which is the embedding the docs imply preview URLs are for. Preview
 responses should forward the guest's own headers, or at least drop `X-Frame-Options` and
 set `frame-ancestors *` (or a caller-supplied origin) on `sandbox.mosaicos.com/preview/*`.
+Until then this project reverse-proxies the guest through a sibling origin and strips
+those headers, so the builder iframe still works.
 
 Reproduction: create a preview, `curl -sSD - -o /tmp/p.html "$URL"`, observe the guest
 body and the control-plane CSP on the same response, then load the URL in an iframe.
@@ -147,10 +149,12 @@ body and the control-plane CSP on the same response, then load the URL in an ifr
 ### 9. Preview URLs return 502 rather than a clear "revoked" response
 
 After `DELETE /v1/sandboxes/{id}/previews/{preview_id}`, the URL starts returning a bare
-502. Revocation genuinely works, which is the important part, but a monitoring system
-cannot tell a deliberately revoked preview apart from a crashed dev server or a platform
-outage. A 410 Gone, or any small JSON body saying the preview was revoked, would make that
-distinction free.
+502. The same Cloudflare HTML also shows up on still-listed previews while `GET /healthz`
+reports `runtime: operational` — the edge is up, `sandbox-origin-mar-sv3` is not. Minting
+a new preview on the same running sandbox returns 200 with guest HTML. Revocation
+genuinely works, which is the important part, but a monitoring system cannot tell a
+deliberately revoked preview apart from a crashed origin or a platform blip. A 410 Gone,
+or any small JSON body saying the preview was revoked, would make that distinction free.
 
 ---
 

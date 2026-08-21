@@ -9,7 +9,22 @@
   </head>
   <body>
     <div id="root"></div>
-    <script src="/coi-serviceworker.js"></script>
+    <script>
+      // The builder embeds a cross-origin preview iframe. Cross-origin isolation
+      // (needed for FFmpeg on the rest of the site) would block that frame.
+      if (location.pathname.startsWith('/builder')) {
+        navigator.serviceWorker?.getRegistrations?.().then((regs) => {
+          if (!regs.length) return;
+          Promise.all(regs.map((r) => r.unregister())).then(() => {
+            if (window.crossOriginIsolated) location.reload();
+          });
+        });
+      } else {
+        const s = document.createElement('script');
+        s.src = '/coi-serviceworker.js';
+        document.body.appendChild(s);
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

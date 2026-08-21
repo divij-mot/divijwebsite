@@ -215,11 +215,14 @@ export interface PreviewInfo {
   url: string;
   expiresAt: number;
   port: number;
+  previewId?: string;
   /**
-   * False when Mosaic's preview response refuses to be framed (`X-Frame-Options: DENY`
-   * or CSP `frame-ancestors 'none'`). The URL still works in a top-level tab.
+   * Sibling-origin URL that strips Mosaic's X-Frame-Options so the app can render
+   * in the builder iframe. Always prefer this over `url` for the pane.
    */
-  embeddable?: boolean;
+  frameUrl?: string | null;
+  ready?: boolean;
+  warning?: string;
 }
 
 export type ToolEventKind =

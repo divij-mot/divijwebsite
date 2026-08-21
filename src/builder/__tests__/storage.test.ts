@@ -194,22 +194,52 @@ describe('ProjectStore', () => {
 });
 
 describe('multi-tab locking', () => {
-  it('gives the second tab read-only access rather than racing', async () => {
-    // Model the Web Locks contract: the first request holds it, the second gets null.
+  const stubLocks = () => {
+    const rooms = new Map<string, Set<{ onmessage: ((event: { data: unknown }) => void) | null; postMessage: (data: unknown) => void; close: () => void }>>();
+    class FakeChannel {
+      onmessage: ((event: { data: unknown }) => void) | null = null;
+      constructor(private readonly name: string) {
+        if (!rooms.has(name)) rooms.set(name, new Set());
+        rooms.get(name)!.add(this);
+      }
+      postMessage(data: unknown) {
+        for (const peer of rooms.get(this.name) ?? []) {
+          if (peer !== this) peer.onmessage?.({ data });
+        }
+      }
+      close() {
+        rooms.get(this.name)?.delete(this);
+      }
+    }
+    vi.stubGlobal('BroadcastChannel', FakeChannel);
+
     let held = false;
     vi.stubGlobal('navigator', {
       locks: {
-        request: async (
+        request: (
           _name: string,
           _options: unknown,
           callback: (lock: unknown) => Promise<unknown>,
         ) => {
-          if (held) return callback(null);
-          held = true;
-          return callback({ name: _name });
+          void (async () => {
+            if (held) {
+              await callback(null);
+              return;
+            }
+            held = true;
+            try {
+              await callback({ name: _name });
+            } finally {
+              held = false;
+            }
+          })();
         },
       },
     });
+  };
+
+  it('gives the second tab read-only access rather than racing', async () => {
+    stubLocks();
 
     const { acquireProjectLock } = await import('../storage/lock');
     const first = await acquireProjectLock('p1');
@@ -219,6 +249,23 @@ describe('multi-tab locking', () => {
     expect(second.state).toBe('reader');
 
     first.release();
+    vi.unstubAllGlobals();
+  });
+
+  it('lets a tab take control from another tab', async () => {
+    stubLocks();
+
+    const { acquireProjectLock } = await import('../storage/lock');
+    const first = await acquireProjectLock('p-steal');
+    expect(first.state).toBe('writer');
+
+    const stolen = first.stolen.then(() => 'stolen');
+    const second = await acquireProjectLock('p-steal', { steal: true });
+    expect(second.state).toBe('writer');
+    expect(first.state).toBe('reader');
+    expect(await stolen).toBe('stolen');
+
+    second.release();
     vi.unstubAllGlobals();
   });
 

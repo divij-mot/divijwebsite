@@ -30,6 +30,7 @@
     "@uiw/codemirror-theme-github": "^4.23.10",
     "@uiw/react-codemirror": "^4.23.10",
     "@vercel/blob": "^1.1.1",
+    "@vercel/functions": "^3.9.5",
     "dompurify": "^3.4.14",
     "fabric": "^6.6.4",
     "fflate": "^0.8.3",

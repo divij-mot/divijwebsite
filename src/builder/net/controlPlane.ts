@@ -120,23 +120,41 @@ export const destroyWorkspace = (workspaceId: string) =>
 // Preview
 // ---------------------------------------------------------------------------
 
-export async function startPreview(workspaceId: string, force = false): Promise<PreviewInfo & { ready: boolean }> {
+export async function startPreview(
+  workspaceId: string,
+  force = false,
+): Promise<PreviewInfo & { ready: boolean }> {
+  return postPreview(workspaceId, { force });
+}
+
+export async function probePreview(workspaceId: string): Promise<PreviewInfo & { ready: boolean }> {
+  return postPreview(workspaceId, { probe: true });
+}
+
+async function postPreview(
+  workspaceId: string,
+  extra: { force?: boolean; probe?: boolean },
+): Promise<PreviewInfo & { ready: boolean }> {
   const r = await request<{
     url: string;
     expires_at: number;
     port: number;
     ready?: boolean;
-    embeddable?: boolean;
+    preview_id?: string;
+    frame_url?: string | null;
+    warning?: string;
   }>('/api/builder/workspaces/preview', {
     method: 'POST',
-    body: JSON.stringify({ workspace_id: workspaceId, force }),
+    body: JSON.stringify({ workspace_id: workspaceId, ...extra }),
   });
   return {
     url: r.url,
     expiresAt: r.expires_at,
     port: r.port,
-    ready: r.ready !== false,
-    ...(typeof r.embeddable === 'boolean' ? { embeddable: r.embeddable } : {}),
+    ready: r.ready === true,
+    previewId: r.preview_id,
+    frameUrl: r.frame_url,
+    warning: r.warning,
   };
 }
 

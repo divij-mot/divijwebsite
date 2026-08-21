@@ -118,17 +118,23 @@ export default function BuilderPage() {
                 : 'No sandbox running'
             }
           >
-            <StatusDot phase={state.sandboxPhase} />
+            <StatusDot phase={state.previewStarting ? 'creating' : state.sandboxPhase} />
             <span>
-              {state.sandboxPhase === 'ready'
-                ? 'Sandbox ready'
-                : state.sandboxPhase === 'creating'
-                  ? 'Starting'
-                  : state.sandboxPhase === 'hydrating'
-                    ? 'Loading files'
-                    : state.sandboxPhase === 'error'
-                      ? 'Sandbox failed'
-                      : 'No sandbox'}
+              {state.previewStarting
+                ? 'Starting preview'
+                : state.preview
+                  ? 'Live preview'
+                  : state.sandboxPhase === 'ready'
+                    ? busy
+                      ? 'Waiting for preview'
+                      : 'Sandbox ready'
+                    : state.sandboxPhase === 'creating'
+                      ? 'Starting'
+                      : state.sandboxPhase === 'hydrating'
+                        ? 'Loading files'
+                        : state.sandboxPhase === 'error'
+                          ? 'Sandbox failed'
+                          : 'No sandbox'}
             </span>
           </div>
 
@@ -175,6 +181,15 @@ export default function BuilderPage() {
           }`}
         >
           <span className="flex-1">{state.error ?? state.notice}</span>
+          {state.readOnly && (
+            <button
+              type="button"
+              onClick={() => void actions.takeControl()}
+              className="shrink-0 rounded-md border border-amber-800/80 bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-200 hover:bg-amber-900/40"
+            >
+              Take control
+            </button>
+          )}
           <button type="button" onClick={actions.dismiss} aria-label="Dismiss" className="shrink-0 opacity-60 hover:opacity-100">
             <X className="h-3.5 w-3.5" />
           </button>
@@ -194,6 +209,7 @@ export default function BuilderPage() {
             disabledReason={disabledReason}
             onSend={actions.sendPrompt}
             onCancel={actions.cancelTurn}
+            onTakeControl={state.readOnly ? actions.takeControl : undefined}
           />
         </section>
 
@@ -211,6 +227,8 @@ export default function BuilderPage() {
               <PreviewPanel
                 preview={state.preview}
                 sandboxPhase={state.sandboxPhase}
+                previewStarting={state.previewStarting}
+                agentBusy={busy}
                 onRefresh={actions.refreshPreview}
                 onStart={() => actions.ensureSandbox().then(() => actions.refreshPreview())}
               />
@@ -250,6 +268,7 @@ export default function BuilderPage() {
               disabledReason={disabledReason}
               onSend={actions.sendPrompt}
               onCancel={actions.cancelTurn}
+              onTakeControl={state.readOnly ? actions.takeControl : undefined}
             />
           )}
           {mobileTab === 'code' && (
@@ -264,6 +283,8 @@ export default function BuilderPage() {
             <PreviewPanel
               preview={state.preview}
               sandboxPhase={state.sandboxPhase}
+              previewStarting={state.previewStarting}
+              agentBusy={busy}
               onRefresh={actions.refreshPreview}
               onStart={() => actions.ensureSandbox().then(() => actions.refreshPreview())}
             />
