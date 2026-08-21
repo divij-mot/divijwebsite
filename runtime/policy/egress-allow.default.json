@@ -1,0 +1,28 @@
+{
+  "_comment": "Baseline egress allowlist baked into the runtime image. Package registries and source hosts only. Application hosts are appended at runtime by POST /api/builder/egress/allow after the user approves them, and are never persisted into the image.",
+  "allow": [
+    "registry.npmjs.org",
+    "registry.yarnpkg.com",
+    "registry.npmmirror.com",
+    "npm.pkg.github.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "raw.githubusercontent.com",
+    "github.com",
+    "api.github.com",
+    "nodejs.org",
+    "deb.debian.org",
+    "security.debian.org",
+    "get.pnpm.io",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com"
+  ],
+  "allow_http": [],
+  "limits": {
+    "max_concurrent_connections": 64,
+    "max_connections_per_session": 5000,
+    "max_bytes_per_session": 2147483648,
+    "max_connection_seconds": 900,
+    "allowed_ports": [443]
+  }
+}

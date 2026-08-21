@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Boot-time privileged setup. The control plane runs this once per sandbox, as root,
+# before any project code executes. Idempotent: re-running it is how a workspace recovers
+# after the guest wakes from hibernation.
+#
+# Containment design, and why it is not a firewall:
+#
+# The obvious approach is nftables (or iptables) with an owner match, dropping traffic
+# from the project uid. Neither works in this guest. The Firecracker kernel (6.1.x) has no
+# nf_tables support at all -- `nft add table` returns "Operation not supported" -- and
+# while legacy xtables is present, its xt_owner module is missing, so per-uid rules cannot
+# be expressed either.
+#
+# Network namespaces do work, and give a stronger guarantee than a firewall rule would.
+# Project code runs in a namespace whose only interface is one end of a veth pair with a
+# /30 and NO default route. There is nothing to misconfigure: the internet is not
+# unreachable by policy, it is unreachable because no route to it exists. DNS fails inside
+# for the same reason, which is intentional -- the proxy resolves names itself and checks
+# every answer against private ranges.
+#
+#   root namespace                    builder namespace
+#   --------------                    -----------------
+#   egress proxy  10.200.0.1:8123 <-- project code, dev server, browser helper
+#   port forwarder 0.0.0.0:3000   --> 10.200.0.2:3000   (so the Mosaic preview works)
+#                                     browser helper on 10.200.0.2:8124
+set -uo pipefail
+
+if [ -f /etc/builder/runtime.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/builder/runtime.env
+  set +a
+fi
+
+NETNS="${BUILDER_NETNS:-builderns}"
+HOST_IP="${BUILDER_HOST_IP:-10.200.0.1}"
+GUEST_IP="${BUILDER_GUEST_IP:-10.200.0.2}"
+EGRESS_PORT="${BUILDER_EGRESS_PORT:-8123}"
+BROWSER_PORT="${BUILDER_BROWSER_PORT:-8124}"
+DEV_PORT="${BUILDER_DEV_PORT:-3000}"
+RUN_DIR=/var/run/builder
+LOG_DIR=/var/log/builder
+STATE_FILE="$RUN_DIR/init.json"
+
+mkdir -p "$RUN_DIR" "$LOG_DIR" /workspace/project /etc/builder
+chown -R builder:builder /workspace "$LOG_DIR" "$RUN_DIR"
+touch "$LOG_DIR/egress.log" && chown egress:egress "$LOG_DIR/egress.log"
+
+# npm, pnpm, and Playwright all write under $HOME. If any of those directories is missing
+# or root-owned, the first install fails with an EACCES that names a cache folder rather
+# than the real problem, so create them up front and hand them to the right user.
+mkdir -p /home/builder/.npm /home/builder/.cache /home/builder/.local/share
+chown -R builder:builder /home/builder
+chmod 755 /home/builder
+
+note() { printf '[builder-init] %s\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Network namespace
+# ---------------------------------------------------------------------------
+
+setup_netns() {
+  if ip netns list 2>/dev/null | grep -qw "$NETNS" && ip netns exec "$NETNS" ip addr show vguest >/dev/null 2>&1; then
+    note "namespace $NETNS already present"
+    return 0
+  fi
+
+  ip netns del "$NETNS" 2>/dev/null
+  ip link del vhost 2>/dev/null
+
+  ip netns add "$NETNS" 2>>"$LOG_DIR/netns.log" || return 1
+  ip link add vhost type veth peer name vguest 2>>"$LOG_DIR/netns.log" || return 1
+  ip link set vguest netns "$NETNS" 2>>"$LOG_DIR/netns.log" || return 1
+  ip addr add "$HOST_IP/30" dev vhost 2>>"$LOG_DIR/netns.log" || return 1
+  ip link set vhost up 2>>"$LOG_DIR/netns.log" || return 1
+  ip netns exec "$NETNS" ip addr add "$GUEST_IP/30" dev vguest 2>>"$LOG_DIR/netns.log" || return 1
+  ip netns exec "$NETNS" ip link set vguest up 2>>"$LOG_DIR/netns.log" || return 1
+  ip netns exec "$NETNS" ip link set lo up 2>>"$LOG_DIR/netns.log" || return 1
+
+  # No default route is added, deliberately. Adding one here would undo the containment.
+  # IP forwarding stays off so the host cannot route the namespace's traffic onward.
+  sysctl -qw net.ipv4.ip_forward=0 2>/dev/null
+
+  # A resolv.conf pointing anywhere would only produce slow timeouts; an empty one fails
+  # fast and pushes name resolution to the proxy where it belongs.
+  mkdir -p "/etc/netns/$NETNS"
+  printf '# Name resolution happens at the egress proxy, not here.\n' > "/etc/netns/$NETNS/resolv.conf"
+
+  note "namespace $NETNS ready ($GUEST_IP -> $HOST_IP, no default route)"
+}
+
+netns_state="failed"
+if setup_netns; then netns_state="enforced"; else note "WARNING: could not create the network namespace"; fi
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+
+wait_for_port() {
+  local host="$1" port="$2"
+  for _ in $(seq 1 60); do
+    if (exec 3<>"/dev/tcp/$host/$port") 2>/dev/null; then
+      exec 3>&- 2>/dev/null
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+start_root_service() {
+  local name="$1" user="$2" script="$3" bind="$4" port="$5"
+  local pidfile="$RUN_DIR/$name.pid"
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    note "$name already running"
+    return 0
+  fi
+  setsid runuser -u "$user" -- env \
+    NODE_PATH="${NODE_PATH:-/usr/local/lib/node_modules}" \
+    BUILDER_EGRESS_PORT="$EGRESS_PORT" \
+    BUILDER_EGRESS_BIND="$bind" \
+    BUILDER_DEV_PORT="$DEV_PORT" \
+    BUILDER_GUEST_IP="$GUEST_IP" \
+    HOME="/home/$user" \
+    node "$script" >>"$LOG_DIR/$name.log" 2>&1 &
+  echo $! >"$pidfile"
+  if wait_for_port "$bind" "$port"; then
+    note "$name up on $bind:$port"
+    return 0
+  fi
+  note "WARNING: $name did not bind $bind:$port; see $LOG_DIR/$name.log"
+  return 1
+}
+
+# The proxy lives in the root namespace and listens on the veth address, which is the only
+# address project code can reach. It must be up before anything tries to install.
+start_root_service egress-proxy egress /opt/builder/services/egress-proxy.mjs "$HOST_IP" "$EGRESS_PORT"
+egress_ok=$?
+
+# Bridges the Mosaic preview (which connects inside the root namespace) to the dev server
+# running in the builder namespace.
+start_root_service port-forwarder builder /opt/builder/services/port-forwarder.mjs 0.0.0.0 "$DEV_PORT"
+forwarder_ok=$?
+
+# The browser helper runs inside the namespace so it reaches the app over loopback, the
+# same way a real user's browser would. The control plane reaches it at $GUEST_IP.
+browser_pidfile="$RUN_DIR/browser-helper.pid"
+if [ -f "$browser_pidfile" ] && kill -0 "$(cat "$browser_pidfile")" 2>/dev/null; then
+  browser_ok=0
+  note "browser-helper already running"
+elif [ "$netns_state" = "enforced" ]; then
+  setsid ip netns exec "$NETNS" runuser -u builder -- env \
+    NODE_PATH="${NODE_PATH:-/usr/local/lib/node_modules}" \
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/playwright-browsers}" \
+    BUILDER_BROWSER_PORT="$BROWSER_PORT" \
+    BUILDER_BROWSER_BIND=0.0.0.0 \
+    BUILDER_DEV_PORT="$DEV_PORT" \
+    HOME=/home/builder \
+    node /opt/builder/services/browser-helper.mjs >>"$LOG_DIR/browser-helper.log" 2>&1 &
+  echo $! >"$browser_pidfile"
+  if wait_for_port "$GUEST_IP" "$BROWSER_PORT"; then
+    browser_ok=0
+    note "browser-helper up on $GUEST_IP:$BROWSER_PORT"
+  else
+    browser_ok=1
+    note "WARNING: browser-helper did not bind; see $LOG_DIR/browser-helper.log"
+  fi
+else
+  browser_ok=1
+  note "skipping browser-helper because the namespace is unavailable"
+fi
+
+cat >"$STATE_FILE" <<JSON
+{
+  "runtime_version": "$(cat /etc/builder/runtime-version 2>/dev/null || echo unknown)",
+  "containment": "$netns_state",
+  "egress_proxy": $([ "$egress_ok" -eq 0 ] && echo true || echo false),
+  "port_forwarder": $([ "$forwarder_ok" -eq 0 ] && echo true || echo false),
+  "browser_helper": $([ "$browser_ok" -eq 0 ] && echo true || echo false),
+  "netns": "$NETNS",
+  "guest_ip": "$GUEST_IP",
+  "host_ip": "$HOST_IP",
+  "initialized_at": "$(date -Is)"
+}
+JSON
+chmod 644 "$STATE_FILE"
+cat "$STATE_FILE"

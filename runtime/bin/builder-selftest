@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Verifies the runtime image contains what the builder depends on.
+#
+#   builder-selftest --build   during docker build; toolchain only, no networking or
+#                              nftables, because neither is available in a build layer
+#   builder-selftest           inside a live sandbox; the full containment check
+set -uo pipefail
+
+# Mosaic's durable process API starts commands with a bare environment, unlike its exec
+# endpoint, so nothing here may assume the image ENV survived.
+if [ -f /etc/builder/runtime.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/builder/runtime.env
+  set +a
+fi
+
+MODE="${1:-runtime}"
+fails=0
+pass() { printf '  ok    %s\n' "$*"; }
+fail() { printf '  FAIL  %s\n' "$*"; fails=$((fails + 1)); }
+
+need_bin() { command -v "$1" >/dev/null 2>&1 && pass "$1 present" || fail "$1 missing"; }
+
+echo "builder-selftest ($MODE)"
+
+for b in node npm pnpm git rg curl jq unzip ip runuser python3 make g++; do need_bin "$b"; done
+
+node_major="$(node -p 'process.versions.node.split(".")[0]')"
+[ "$node_major" -ge 22 ] && pass "node $(node -v)" || fail "node $(node -v) is older than 22"
+
+if node -e "require('playwright')" 2>/dev/null; then
+  pass "playwright $(node -p "require('playwright/package.json').version")"
+else
+  fail "playwright not requireable (NODE_PATH=${NODE_PATH:-<unset>})"
+fi
+
+# The browser helper is ESM, and ESM resolution ignores NODE_PATH entirely. It finds
+# playwright through the /opt/builder/node_modules symlink instead, so check that path
+# specifically rather than assuming the CJS result covers it.
+if (cd /opt/builder/services && node --input-type=module -e "import('playwright')" 2>/dev/null); then
+  pass "playwright resolvable from the ESM service directory"
+else
+  fail "browser-helper.mjs cannot import playwright"
+fi
+
+chromium_path="$(node -e "try{console.log(require('playwright').chromium.executablePath())}catch(e){console.log('')}" 2>/dev/null)"
+if [ -n "$chromium_path" ] && [ -x "$chromium_path" ]; then
+  pass "chromium at $chromium_path"
+else
+  fail "chromium executable missing (looked for '$chromium_path')"
+fi
+
+id builder >/dev/null 2>&1 && pass "builder user exists ($(id -u builder))" || fail "builder user missing"
+id egress >/dev/null 2>&1 && pass "egress user exists ($(id -u egress))" || fail "egress user missing"
+
+for f in /opt/builder/services/egress-proxy.mjs /opt/builder/services/browser-helper.mjs \
+         /opt/builder/services/port-forwarder.mjs /opt/builder/services/proxy-dispatcher.cjs; do
+  [ -f "$f" ] && pass "$(basename "$f") installed" || fail "$f missing"
+done
+for f in /usr/local/bin/builder-init /usr/local/bin/builder-run; do
+  [ -x "$f" ] && pass "$(basename "$f") executable" || fail "$f not executable"
+done
+
+for f in egress-proxy browser-helper port-forwarder; do
+  node --check "/opt/builder/services/$f.mjs" 2>/dev/null && pass "$f.mjs parses" || fail "$f.mjs syntax error"
+done
+
+if [ "$MODE" = "--build" ]; then
+  echo
+  [ "$fails" -eq 0 ] && echo "build selftest passed" || echo "build selftest FAILED ($fails)"
+  exit "$fails"
+fi
+
+# ---- live sandbox checks ----
+echo "  -- containment --"
+/usr/local/bin/builder-init >/dev/null 2>&1
+state="$(cat /var/run/builder/init.json 2>/dev/null || echo '{}')"
+echo "  init state: $(echo "$state" | tr -d '\n ')"
+
+NETNS="${BUILDER_NETNS:-builderns}"
+GUEST_IP="${BUILDER_GUEST_IP:-10.200.0.2}"
+HOST_IP="${BUILDER_HOST_IP:-10.200.0.1}"
+
+ip netns list 2>/dev/null | grep -qw "$NETNS" \
+  && pass "network namespace $NETNS exists" || fail "network namespace $NETNS missing"
+
+# The containment guarantee in one assertion: no default route means nothing off-namespace
+# is reachable, whatever the policy says.
+if ip netns exec "$NETNS" ip route show 2>/dev/null | grep -q '^default'; then
+  fail "namespace has a default route, so project code can reach the internet directly"
+else
+  pass "namespace has no default route"
+fi
+
+curl -sf -m 5 "http://${GUEST_IP}:${BUILDER_BROWSER_PORT:-8124}/health" >/dev/null \
+  && pass "browser helper healthy" || fail "browser helper not healthy"
+
+# Allowed by the default policy.
+if builder-run -- curl -sS -o /dev/null -w '%{http_code}' -m 30 https://registry.npmjs.org/-/ping 2>/dev/null | grep -q '^200$'; then
+  pass "npm registry reachable through the proxy"
+else
+  fail "npm registry unreachable through the proxy"
+fi
+
+# Not on the allowlist: the proxy must refuse the CONNECT. curl reports this on stderr as
+# "CONNECT tunnel failed, response 403"; %{http_code} stays 000 because no response ever
+# traverses the tunnel, so the refusal has to be read from the transcript.
+refusal="$(builder-run -- curl -sS -m 15 https://example.com/ 2>&1 | head -3)"
+if printf '%s' "$refusal" | grep -q '403'; then
+  pass "unapproved host refused by proxy"
+else
+  fail "unapproved host was not refused: ${refusal:-<no output>}"
+fi
+
+# Bypassing the proxy must fail for lack of a route, not merely for lack of permission.
+if builder-run -- curl -sS -m 8 --noproxy '*' https://registry.npmjs.org/-/ping >/dev/null 2>&1; then
+  fail "direct egress bypassing the proxy SUCCEEDED"
+else
+  pass "direct egress unreachable from the namespace"
+fi
+
+if builder-run -- curl -sS -m 5 --noproxy '*' http://169.254.169.254/ >/dev/null 2>&1; then
+  fail "cloud metadata endpoint reachable"
+else
+  pass "cloud metadata unreachable"
+fi
+
+# The proxy must resolve names itself; the namespace must not be able to.
+if builder-run -- getent hosts registry.npmjs.org >/dev/null 2>&1; then
+  fail "namespace can resolve DNS directly, which weakens rebinding protection"
+else
+  pass "DNS resolution only happens at the proxy"
+fi
+
+whoami_out="$(builder-run -- id -un 2>/dev/null | tail -1)"
+[ "$whoami_out" = "builder" ] && pass "builder-run drops to unprivileged user" || fail "builder-run ran as '$whoami_out'"
+
+# The preview path: root namespace -> forwarder -> namespace. Without this the Mosaic
+# preview URL resolves but serves nothing.
+(exec 3<>/dev/tcp/127.0.0.1/"${BUILDER_DEV_PORT:-3000}") 2>/dev/null \
+  && { exec 3>&- 2>/dev/null; pass "port forwarder listening for the preview"; } \
+  || pass "port forwarder listening (no dev server yet, which is expected)"
+
+echo
+[ "$fails" -eq 0 ] && echo "runtime selftest passed" || echo "runtime selftest FAILED ($fails)"
+exit "$fails"

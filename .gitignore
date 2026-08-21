@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .env
 .vercel
+
+# TypeScript incremental build state
+*.tsbuildinfo

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Run a command as the unprivileged project user, inside the contained network namespace.
+#
+# Every agent shell command, install, build, and dev server goes through here. Root and
+# the root network namespace are reserved for builder-init and the two services it starts.
+#
+# The namespace has no default route, so the only reachable destination is the egress
+# proxy across the veth. Proxy variables are injected per-process and never written into
+# project files, so an exported ZIP carries no trace of them.
+#
+#   builder-run -- npm install
+#   builder-run --cwd /workspace/project/apps/web -- npm run build
+set -uo pipefail
+
+if [ -f /etc/builder/runtime.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/builder/runtime.env
+  set +a
+fi
+
+CWD="${BUILDER_WORKSPACE:-/workspace/project}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --cwd) CWD="$2"; shift 2 ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+
+if [ $# -eq 0 ]; then
+  echo "usage: builder-run [--cwd DIR] -- COMMAND [ARGS...]" >&2
+  exit 64
+fi
+
+mkdir -p "$CWD" 2>/dev/null
+chown builder:builder "$CWD" 2>/dev/null
+
+NETNS="${BUILDER_NETNS:-builderns}"
+HOST_IP="${BUILDER_HOST_IP:-10.200.0.1}"
+PROXY="http://${HOST_IP}:${BUILDER_EGRESS_PORT:-8123}"
+
+# Refuse to run project code outside the namespace. Falling back to the root namespace on
+# a setup failure would silently hand untrusted code unrestricted internet access, which
+# is worse than not running it at all.
+if ! ip netns list 2>/dev/null | grep -qw "$NETNS"; then
+  echo "builder-run: network namespace '$NETNS' is missing; run builder-init first." >&2
+  echo "Refusing to run project code without containment." >&2
+  exit 70
+fi
+
+# NODE_USE_ENV_PROXY covers runtimes with built-in proxy support; the preload covers the
+# rest, so server-side fetch in generated code cannot slip past the allowlist.
+exec ip netns exec "$NETNS" runuser -u builder -- env \
+  HOME=/home/builder \
+  USER=builder \
+  PATH="${PATH:-/opt/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}" \
+  NODE_PATH="${NODE_PATH:-/usr/local/lib/node_modules}" \
+  HTTP_PROXY="$PROXY" \
+  HTTPS_PROXY="$PROXY" \
+  http_proxy="$PROXY" \
+  https_proxy="$PROXY" \
+  NO_PROXY="localhost,127.0.0.1,::1" \
+  no_proxy="localhost,127.0.0.1,::1" \
+  NODE_USE_ENV_PROXY=1 \
+  NODE_OPTIONS="${NODE_OPTIONS:-} --require /opt/builder/services/proxy-dispatcher.cjs" \
+  NPM_CONFIG_PROXY="$PROXY" \
+  NPM_CONFIG_HTTPS_PROXY="$PROXY" \
+  NPM_CONFIG_CACHE=/home/builder/.npm \
+  XDG_CACHE_HOME=/home/builder/.cache \
+  PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/playwright-browsers}" \
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+  PNPM_HOME=/opt/pnpm \
+  NEXT_TELEMETRY_DISABLED=1 \
+  CI=1 \
+  bash -lc 'cd "$0" && exec "${@}"' "$CWD" "$@"

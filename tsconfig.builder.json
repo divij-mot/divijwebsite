@@ -1,0 +1,25 @@
+{
+  // Typechecks only the builder. The rest of src/ predates this work and has never been
+  // typechecked (the Vite build does not run tsc), so including it would report dozens of
+  // pre-existing errors and make `npm run typecheck` useless as a signal.
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/builder/**/*.ts", "src/builder/**/*.tsx"]
+}

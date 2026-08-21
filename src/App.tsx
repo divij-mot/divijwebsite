@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { Sidebar } from './components/Sidebar';
@@ -19,6 +19,9 @@ import InfinitePage from './pages/InfinitePage';
 import { MinimalLanding } from './pages/MinimalLanding';
 import { Writings } from './pages/Writings';
 import { SmoothTransition } from './components/SmoothTransition';
+
+// Lazy so the builder's editor, worker, and archive code stay out of the portfolio bundle.
+const BuilderPage = lazy(() => import('./builder/ui/BuilderPage'));
 
 
 interface LayoutProps {
@@ -135,6 +138,19 @@ function AppRouter() {
   // Show writings page without transition
   if (location.pathname === '/writings') {
     return <Writings />;
+  }
+
+  // The builder owns the whole viewport: no sidebar, no theme wrapper, no landing
+  // transition. It must also come before the catch-all, which would otherwise hand
+  // /builder to the AI page generator.
+  if (location.pathname === '/builder' || location.pathname.startsWith('/builder/')) {
+    return (
+      <Suspense
+        fallback={<div className="flex h-screen items-center justify-center bg-neutral-950 text-sm text-neutral-600">Loading the builder</div>}
+      >
+        <BuilderPage />
+      </Suspense>
+    );
   }
 
   const minimalSite = <MinimalLanding onEnter={handleEnterSite} />;
