@@ -32,7 +32,7 @@ export const Writings: React.FC = () => {
 
       <button
         onClick={handleBack}
-        className={`fixed top-6 right-6 p-3 rounded-full transition-all duration-300 z-20 ${
+        className={`landing-back p-3 rounded-full transition-all duration-300 z-20 ${
           isDark 
             ? 'bg-neutral-800/30 hover:bg-neutral-700/40 text-neutral-300' 
             : 'bg-neutral-200/30 hover:bg-neutral-300/40 text-neutral-700'
@@ -43,7 +43,7 @@ export const Writings: React.FC = () => {
       </button>
 
       <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
-        <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
+        <div className="landing-copy min-h-full flex items-start justify-center px-6">
           <div className="max-w-2xl w-full">
         <h1 className={`text-4xl md:text-5xl font-bold mb-12 transition-colors duration-300 ${
           isDark ? 'text-neutral-100' : 'text-neutral-900'

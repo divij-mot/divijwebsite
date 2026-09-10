@@ -54,7 +54,7 @@ export const MinimalLanding: React.FC<MinimalLandingProps> = ({ onEnter }) => {
       />
 
       <div className="absolute inset-0 overflow-y-auto overflow-x-hidden z-10">
-        <div className="min-h-full flex items-start justify-center px-6 pt-32 pb-40">
+        <div className="landing-copy min-h-full flex items-start justify-center px-6">
           <div className="max-w-2xl w-full">
         <h1 
           onClick={handleNameClick}

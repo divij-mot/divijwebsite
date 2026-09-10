@@ -126,7 +126,9 @@ the builder's; without it a Next.js app gets an opaque origin and hydrates to a 
 page. Top navigation is withheld so a generated page cannot redirect the builder tab.
 
 The rest of the site uses a COI service worker so FFmpeg can use `SharedArrayBuffer`.
-That isolation is skipped on `/builder`, because it would block the preview iframe.
+Safari and iOS skip that worker — they never isolate with COEP `credentialless`, and an older
+script reloaded the tab forever. `/builder` also skips it, because isolation would block the
+preview iframe.
 
 ### Why the headers in `vercel.json` are what they are
 

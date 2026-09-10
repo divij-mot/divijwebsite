@@ -8,12 +8,12 @@ interface DotSunMoonProps {
   onMouseLeave?: () => void;
 }
 
-export const DotSunMoon: React.FC<DotSunMoonProps> = ({ 
-  isDark, 
-  isSecret, 
+export const DotSunMoon: React.FC<DotSunMoonProps> = ({
+  isDark,
+  isSecret,
   onClick,
   onMouseEnter,
-  onMouseLeave 
+  onMouseLeave,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
@@ -40,34 +40,25 @@ export const DotSunMoon: React.FC<DotSunMoonProps> = ({
       const centerY = size / 2;
       const radius = 18;
 
-      // Draw dots in circular pattern
       for (let angle = 0; angle < Math.PI * 2; angle += 0.2) {
         for (let r = 0; r < radius; r += spacing) {
           const x = centerX + Math.cos(angle) * r;
           const y = centerY + Math.sin(angle) * r;
+          const distFromCenter = Math.hypot(x - centerX, y - centerY);
 
-          const distFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-          
-          // For moon, create crescent shape (keep shape even when secret)
           if (isDark) {
             const moonOffsetX = 8;
-            const distFromMoonCenter = Math.sqrt(
-              Math.pow(x - (centerX + moonOffsetX), 2) + Math.pow(y - centerY, 2)
-            );
+            const distFromMoonCenter = Math.hypot(x - (centerX + moonOffsetX), y - centerY);
             if (distFromMoonCenter < radius * 0.7) continue;
           }
 
           if (distFromCenter < radius) {
-            const opacity = 0.6 + Math.random() * 0.4;
-            
-            let color;
-            if (isSecret) {
-              color = `rgba(220, 38, 38, ${opacity})`; // Red for secret
-            } else if (isDark) {
-              color = `rgba(245, 245, 245, ${opacity})`; // White for moon
-            } else {
-              color = `rgba(64, 64, 64, ${opacity})`; // Dark for sun
-            }
+            const twinkle = 0.72 + Math.sin(time * 2 + x * 0.35 + y * 0.2) * 0.22;
+            const color = isSecret
+              ? `rgba(220, 38, 38, ${twinkle})`
+              : isDark
+                ? `rgba(245, 245, 245, ${twinkle})`
+                : `rgba(64, 64, 64, ${twinkle})`;
 
             ctx.fillStyle = color;
             ctx.beginPath();
@@ -77,19 +68,18 @@ export const DotSunMoon: React.FC<DotSunMoonProps> = ({
         }
       }
 
-      // Sun rays (keep rays even when secret if in light mode)
       if (!isDark) {
-        const rayLength = 12;
-        const rayAngles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, 5*Math.PI/4, 3*Math.PI/2, 7*Math.PI/4];
-        
-        rayAngles.forEach(angle => {
+        const rayAngles = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI, (5 * Math.PI) / 4, (3 * Math.PI) / 2, (7 * Math.PI) / 4];
+
+        rayAngles.forEach((angle) => {
           for (let i = 0; i < 4; i++) {
             const distance = radius + 2 + i * 3;
             const x = centerX + Math.cos(angle) * distance;
             const y = centerY + Math.sin(angle) * distance;
-            
-            const opacity = 0.5 + Math.random() * 0.3;
-            const rayColor = isSecret ? `rgba(220, 38, 38, ${opacity})` : `rgba(64, 64, 64, ${opacity})`;
+            const twinkle = 0.58 + Math.sin(time * 2 + i + angle) * 0.18;
+            const rayColor = isSecret
+              ? `rgba(220, 38, 38, ${twinkle})`
+              : `rgba(64, 64, 64, ${twinkle})`;
             ctx.fillStyle = rayColor;
             ctx.beginPath();
             ctx.arc(x, y, dotSize, 0, Math.PI * 2);
@@ -105,9 +95,7 @@ export const DotSunMoon: React.FC<DotSunMoonProps> = ({
     draw();
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [isDark, isSecret]);
 
@@ -116,15 +104,10 @@ export const DotSunMoon: React.FC<DotSunMoonProps> = ({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed top-6 left-6 transition-all duration-500 z-20 cursor-pointer hover:opacity-80"
+      className="landing-sun transition-opacity duration-500 hover:opacity-80"
       aria-label={isSecret ? 'Enter site' : 'Toggle theme'}
     >
-      <canvas
-        ref={canvasRef}
-        className="block"
-        style={{ imageRendering: 'pixelated' }}
-      />
+      <canvas ref={canvasRef} />
     </button>
   );
 };
-

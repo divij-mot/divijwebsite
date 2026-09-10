@@ -3,27 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Divij Motwani</title>
   </head>
   <body>
     <div id="root"></div>
     <script>
-      // The builder embeds a cross-origin preview iframe. Cross-origin isolation
-      // (needed for FFmpeg on the rest of the site) would block that frame.
-      if (location.pathname.startsWith('/builder')) {
-        navigator.serviceWorker?.getRegistrations?.().then((regs) => {
-          if (!regs.length) return;
-          Promise.all(regs.map((r) => r.unregister())).then(() => {
-            if (window.crossOriginIsolated) location.reload();
+      // SharedArrayBuffer / FFmpeg need COOP+COEP. The previous worker reloaded
+      // forever on Safari and iOS, which never isolate with COEP credentialless.
+      (function () {
+        var ua = navigator.userAgent || '';
+        var isiOS = /iP(hone|ad|od)/.test(ua) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var isSafari = isiOS || (/Safari/i.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox|Android/i.test(ua));
+        var isBuilder = location.pathname.indexOf('/builder') === 0;
+
+        function reloadOnce(key) {
+          try {
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+          } catch (e) {}
+          location.reload();
+        }
+
+        function dropIsolation() {
+          if (!('serviceWorker' in navigator)) return;
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            var had = regs.length > 0 || !!navigator.serviceWorker.controller;
+            Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
+              if (had) reloadOnce('coiDropped');
+            });
           });
-        });
-      } else {
-        const s = document.createElement('script');
+        }
+
+        if (isBuilder || isSafari) {
+          dropIsolation();
+          return;
+        }
+
+        var s = document.createElement('script');
         s.src = '/coi-serviceworker.js';
         document.body.appendChild(s);
-      }
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

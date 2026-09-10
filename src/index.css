@@ -6,6 +6,71 @@ html, body {
   overscroll-behavior: none;
 }
 
+html, body, #root {
+  min-height: 100%;
+}
+
+@supports (min-height: 100dvh) {
+  html, body, #root {
+    min-height: 100dvh;
+  }
+}
+
+:root {
+  --sun-top: max(1.5rem, calc(env(safe-area-inset-top, 0px) + 0.75rem));
+  --sun-left: max(1.5rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
+}
+
+.landing-sun {
+  position: fixed;
+  top: var(--sun-top);
+  left: var(--sun-left);
+  z-index: 20;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.landing-sun canvas {
+  display: block;
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.landing-landscape {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  image-rendering: pixelated;
+}
+
+@supports (height: 100dvh) {
+  .landing-landscape {
+    /* Visible viewport, so the horizon is not stretched under the iOS toolbar. */
+    height: 100dvh;
+  }
+}
+
+.landing-copy {
+  padding-top: max(8rem, calc(env(safe-area-inset-top, 0px) + 6.5rem));
+  padding-bottom: max(10rem, calc(env(safe-area-inset-bottom, 0px) + 8rem));
+}
+
+.landing-back {
+  position: fixed;
+  top: var(--sun-top);
+  right: max(1.5rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
+  z-index: 20;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

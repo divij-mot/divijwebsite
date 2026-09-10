@@ -177,7 +177,7 @@ function AppRouter() {
       {/* Minimal site */}
       <div 
         className={`${!showFancySite && !isTransitioning ? 'relative z-10' : 'absolute inset-0 z-0'} transition-opacity duration-700 ${
-          !showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0'
+          !showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         {minimalSite}
@@ -186,7 +186,7 @@ function AppRouter() {
       {/* Fancy site */}
       <div 
         className={`${showFancySite && !isTransitioning ? 'relative z-10' : 'absolute inset-0 z-0'} transition-opacity duration-700 ${
-          showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0'
+          showFancySite && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         {fancySite}
