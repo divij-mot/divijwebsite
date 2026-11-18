@@ -26,6 +26,10 @@ if (typeof window === 'undefined') {
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
             return;
         }
+        // Cloudflare's own endpoints (its analytics beacon) go straight to the network
+        if (new URL(r.url).pathname.startsWith("/cdn-cgi/")) {
+            return;
+        }
 
         const request = (coepCredentialless && r.mode === "no-cors")
             ? new Request(r, {
