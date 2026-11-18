@@ -4,6 +4,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { createSim } from "./pusht-sim.js";
+import { token } from "../../lib/palette.js";
 
 /*
   Causal Video Generation as a Policy
@@ -86,10 +87,14 @@ function studioEnvironment(renderer) {
 const breathe = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
 export async function createPushT(host) {
+  FACE[BG].set(token("--disc-off", "#0c0c0c"));
+  FACE[WHITE].set(token("--disc", "#f3f1ec"));
+  FACE[ORANGE].set(token("--orange", "#ff5a1f"));
+  const STAGE = new THREE.Color(token("--stage", "#050505"));
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
-  renderer.setClearColor(0x050505, 1);
+  renderer.setClearColor(STAGE, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -99,7 +104,7 @@ export async function createPushT(host) {
   scene.environment = studioEnvironment(renderer);
   await breathe();
   scene.environmentIntensity = 0.62;
-  scene.fog = new THREE.Fog(0x050505, 70, 125);
+  scene.fog = new THREE.Fog(STAGE, 70, 125);
 
   const camera = new THREE.PerspectiveCamera(26, 2, 1, 400);
 
@@ -145,7 +150,7 @@ export async function createPushT(host) {
   discs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(discs);
 
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: STAGE }));
   plate.rotation.x = -Math.PI / 2;
   plate.position.y = -0.45;
   scene.add(plate);
@@ -263,8 +268,8 @@ export async function createPushT(host) {
   const puck = new THREE.Mesh(
     new THREE.CylinderGeometry(1.3, 1.3, 0.5, 64),
     new THREE.MeshPhysicalMaterial({
-      color: "#0a2cf0",
-      emissive: "#0a2cf0",
+      color: token("--puck", "#0a2cf0"),
+      emissive: token("--puck", "#0a2cf0"),
       emissiveIntensity: 0.5,
       roughness: 0.18,
       clearcoat: 1,
@@ -272,7 +277,7 @@ export async function createPushT(host) {
     })
   );
   scene.add(puck);
-  const puckLight = new THREE.PointLight("#2a4bff", 3, 4.5, 2);
+  const puckLight = new THREE.PointLight(token("--puck-light", "#2a4bff"), 3, 4.5, 2);
   scene.add(puckLight);
   const shadow = new THREE.Mesh(
     new THREE.PlaneGeometry(5, 5).rotateX(-Math.PI / 2),

@@ -7,6 +7,7 @@ import { runIntro } from "./intro.js";
 import { splitWord, kernWord, fitWord, setAxis, gutter } from "../lib/wordmark.js";
 import { flipify } from "../lib/flip.js";
 import { fontsReady as copyFontsReady, blockReady } from "../lib/fonts.js";
+import { attachSwap } from "../lib/swap.js";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -15,9 +16,10 @@ gsap.registerPlugin(ScrollTrigger, SplitText);
  *   playIntro  — run the opening (first visit to "/" only)
  *   section    — "work" | "contact": land there instead of the top
  *   navigate   — SPA navigation for internal links
+ *   onPalette  — called after the Berkeley lens switches the palette
  * Returns a destroy() that tears down everything it created.
  */
-export function initHome(root, { playIntro = false, section = null, navigate } = {}) {
+export function initHome(root, { playIntro = false, section = null, navigate, onPalette } = {}) {
   const html = document.documentElement;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const intro = playIntro && !reduced && !section;
@@ -55,6 +57,9 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
   };
   root.addEventListener("click", onClick);
   cleanups.push(() => root.removeEventListener("click", onClick));
+
+  // "Berkeley", top and bottom: a lens onto the other palette
+  cleanups.push(attachSwap(root, { onSwitch: (name) => onPalette?.(name) }));
 
   // ── fitting ───────────────────────────────────────────────
   const heroWord = $(".hero__word");

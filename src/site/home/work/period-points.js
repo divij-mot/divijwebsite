@@ -16,10 +16,13 @@ function ground(px, py) {
 // the same sRGB → linear conversion three.js applies to THREE.Color("#…")
 const lin = (c) => (c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4));
 const hex = (h) => [0, 2, 4].map((i) => lin(parseInt(h.slice(i, i + 2), 16) / 255));
-const BONE = hex("f2efe8");
-const ORANGE = hex("ff5a1f");
+const BONE_DEFAULT = "#f2efe8";
+const ORANGE_DEFAULT = "#ff5a1f";
 
-export function samplePoints(px) {
+// colours arrive as "#rrggbb" from the page's tokens (see lib/palette.js)
+export function samplePoints(px, colors = {}) {
+  const BONE = hex((colors.points || BONE_DEFAULT).slice(1));
+  const ORANGE = hex((colors.accent || ORANGE_DEFAULT).slice(1));
   const cap = IMG_W * IMG_H;
   const pos = new Float32Array(cap * 3);
   const col = new Float32Array(cap * 3);

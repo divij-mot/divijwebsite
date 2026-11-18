@@ -19,6 +19,7 @@ import { gsap } from "gsap";
 */
 
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rgb3 = (n) => css(n).split(/[\s,]+/).map(Number);
 const deg = (r) => (r * 180) / Math.PI;
 const rad = (d) => (d * Math.PI) / 180;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -85,6 +86,8 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
     const BLUE = css("--blue");
     const ORANGE = css("--orange");
     const COL = [INK, WHITE, BLUE, INK, ORANGE];
+    const CUBE_LIT = rgb3("--cube-lit").join(",");
+    const CUBE_SHADE = rgb3("--cube-shade").join(",");
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -169,12 +172,14 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
 
     // the dark faces, barely there: enough to show the board and its angle
     const lit = { a: 0 };
-    const OFF = "rgb(21,21,24)";
+    const [o0, o1, o2] = rgb3("--board-off");
+    const [w0, w1, w2] = rgb3("--glow-dim");
+    const OFF = `rgb(${o0},${o1},${o2})`;
     // the cube lights the dark discs around it
     const glow = { x: -1e4, y: -1e4, r: C * 5 };
     const WARM = Array.from({ length: 9 }, (_, i) => {
       const f = (i / 8) ** 1.4;
-      return `rgb(${Math.round(21 + 84 * f)},${Math.round(21 + 26 * f)},${Math.round(24 + 4 * f)})`;
+      return `rgb(${Math.round(o0 + (w0 - o0) * f)},${Math.round(o1 + (w1 - o1) * f)},${Math.round(o2 + (w2 - o2) * f)})`;
     });
     const vig = new Float32Array(N);
     for (let n = 0; n < N; n++) {
@@ -192,9 +197,10 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
       const b = bloom.getContext("2d");
       const r = bloom.width / 2;
       const g = b.createRadialGradient(r, r, 0, r, r, r);
-      g.addColorStop(0, "rgba(255,110,40,0.55)");
-      g.addColorStop(0.35, "rgba(255,90,31,0.16)");
-      g.addColorStop(1, "rgba(255,90,31,0)");
+      const [g0, g1, g2] = rgb3("--glow");
+      g.addColorStop(0, `rgba(${g0},${g1},${g2},0.55)`);
+      g.addColorStop(0.35, `rgba(${g0},${Math.round(g1 * 0.82)},${Math.round(g2 * 0.78)},0.16)`);
+      g.addColorStop(1, `rgba(${g0},${Math.round(g1 * 0.82)},${Math.round(g2 * 0.78)},0)`);
       b.fillStyle = g;
       b.fillRect(0, 0, bloom.width, bloom.height);
     }
@@ -366,14 +372,15 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
         const key = `${sc.x},${sc.y}`;
         if (key === sampled) return;
         sampled = key;
+        // a black-on-white mask, whatever the palette: dark pixels are letters
         o2.setTransform(1, 0, 0, 1, 0, 0);
-        o2.fillStyle = BLUE;
+        o2.fillStyle = "#ffffff";
         o2.fillRect(0, 0, off.width, off.height);
         o2.setTransform(k, 0, 0, k, -X0 * k, -Y0 * k);
         o2.translate(vw / 2 + sc.x, vh / 2 + sc.y);
         o2.rotate(rad(-theta));
         o2.transform(1, 0, sk, 1, 0, 0);
-        o2.fillStyle = INK;
+        o2.fillStyle = "#000000";
         glyphs.forEach((gl) => {
           o2.save();
           o2.translate(gl.x - W / 2, base - H / 2);
@@ -385,7 +392,8 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
         for (let j = 0; j < rows; j++) {
           for (let i = 0; i < cols; i++) {
             const p = ((j * SS + 1) * off.width + (i * SS + 1)) * 4;
-            target[j * cols + i] = px[p] + px[p + 1] + px[p + 2] < 160 ? LETTER : FIELD;
+            // a cell is a letter once the glyph covers about half of it (as before, on blue and black)
+            target[j * cols + i] = px[p] + px[p + 1] + px[p + 2] < 398 ? LETTER : FIELD;
           }
         }
       }
@@ -466,9 +474,9 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
         ctx.fillRect(0, -L, L, L);
         if (a === 1) {
           ctx.shadowBlur = 0;
-          ctx.fillStyle = "rgba(255,214,190,0.85)";
+          ctx.fillStyle = `rgba(${CUBE_LIT},0.85)`;
           ctx.fillRect(0, -L, L, L * 0.16);
-          ctx.fillStyle = "rgba(90,20,0,0.35)";
+          ctx.fillStyle = `rgba(${CUBE_SHADE},0.35)`;
           ctx.fillRect(L * 0.84, -L, L * 0.16, L);
           ctx.fillStyle = ORANGE;
         }

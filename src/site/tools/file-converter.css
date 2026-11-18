@@ -35,10 +35,10 @@
 .fc-families + .fc-settings { margin-top: clamp(18px, 3vh, 28px); }
 
 /* a seg with a quiet word in front, and a wider gap between kinds of output */
-.fc-seg__lead { font-size: 15px; line-height: 1.4; color: rgb(255 255 255 / 0.74); margin-right: 0.4em; }
+.fc-seg__lead { font-size: 15px; line-height: 1.4; color: color-mix(in srgb, var(--white) 74%, transparent); margin-right: 0.4em; }
 .u-seg > button.fc-gap { margin-left: 1.1em; }
 .u-seg > button:disabled { cursor: default; }
-.u-seg > button:disabled:not([aria-pressed="true"]) { color: rgb(255 255 255 / 0.24); }
+.u-seg > button:disabled:not([aria-pressed="true"]) { color: color-mix(in srgb, var(--white) 24%, transparent); }
 
 .fc-pair { display: flex; flex-wrap: wrap; gap: 14px 2.4em; }
 
@@ -57,9 +57,9 @@
 .fc-range input:focus-visible { outline: none; }
 .fc-range input::-webkit-slider-runnable-track {
   height: 2px;
-  background: linear-gradient(90deg, var(--white) calc(var(--v, 0.8) * 100%), rgb(255 255 255 / 0.16) 0);
+  background: linear-gradient(90deg, var(--white) calc(var(--v, 0.8) * 100%), color-mix(in srgb, var(--white) 16%, transparent) 0);
 }
-.fc-range input::-moz-range-track { height: 2px; background: rgb(255 255 255 / 0.16); }
+.fc-range input::-moz-range-track { height: 2px; background: color-mix(in srgb, var(--white) 16%, transparent); }
 .fc-range input::-moz-range-progress { height: 2px; background: var(--white); }
 .fc-range input::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -121,7 +121,7 @@
   text-overflow: ellipsis;
   transition: color 0.4s ease;
 }
-.fc-item.is-queued .fc-name { color: rgb(255 255 255 / 0.6); }
+.fc-item.is-queued .fc-name { color: color-mix(in srgb, var(--white) 60%, transparent); }
 .fc-body { grid-area: body; display: grid; gap: 18px; margin-top: 18px; min-width: 0; }
 .fc-state { display: grid; gap: 12px; max-width: 40em; animation: fc-rise 0.5s var(--ease) both; }
 .fc-state .note em { overflow-wrap: anywhere; }
@@ -152,7 +152,7 @@
   font-size: clamp(48px, 7.4vw, 140px);
   line-height: 0.95;
   letter-spacing: -0.022em;
-  color: var(--white);
+  color: var(--plate-text);
 }
 
 @keyframes fc-rise {

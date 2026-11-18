@@ -28,6 +28,12 @@ function Builder() {
     l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap';
     document.head.appendChild(l);
   }, []);
+  // the builder keeps its own near-black, whatever palette the site is in
+  useEffect(() => {
+    const els = [document.documentElement, document.body];
+    els.forEach((el) => el.style.setProperty('background', '#050505'));
+    return () => els.forEach((el) => el.style.removeProperty('background'));
+  }, []);
   return (
     <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       <Suspense

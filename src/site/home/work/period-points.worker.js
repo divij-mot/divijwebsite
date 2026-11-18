@@ -2,7 +2,7 @@
 // the parking lot never stalls scrolling.
 import { IMG_W, IMG_H, samplePoints } from "./period-points.js";
 
-self.onmessage = async ({ data: { src } }) => {
+self.onmessage = async ({ data: { src, colors } }) => {
   try {
     const blob = await (await fetch(src)).blob();
     const bmp = await createImageBitmap(blob);
@@ -10,7 +10,7 @@ self.onmessage = async ({ data: { src } }) => {
     const cx = cv.getContext("2d", { willReadFrequently: true });
     cx.drawImage(bmp, 0, 0, IMG_W, IMG_H);
     bmp.close?.();
-    const pts = samplePoints(cx.getImageData(0, 0, IMG_W, IMG_H).data);
+    const pts = samplePoints(cx.getImageData(0, 0, IMG_W, IMG_H).data, colors);
     self.postMessage({ pts }, Object.values(pts).map((a) => a.buffer));
   } catch (e) {
     self.postMessage({ error: String(e) });

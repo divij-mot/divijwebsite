@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import STALLS from "../assets/period-stalls.json";
 import { IMG_W, IMG_H, samplePoints } from "./period-points.js";
+import { token } from "../../lib/palette.js";
 
 /*
   period — an end-to-end car-parking world model.
@@ -104,6 +105,7 @@ const smooth = (t) => t * t * (3 - 2 * t);
 // scroll. Starts as soon as it's called; the scene waits on it later.
 export function samplePeriod(src) {
   const url = new URL(src, location.href).href;
+  const colors = { points: token("--points", "#f2efe8"), accent: token("--orange", "#ff5a1f") };
   const onMain = async () => {
     const img = await loadImage(url);
     const cv = document.createElement("canvas");
@@ -111,7 +113,7 @@ export function samplePeriod(src) {
     cv.height = IMG_H;
     const cx = cv.getContext("2d", { willReadFrequently: true });
     cx.drawImage(img, 0, 0, IMG_W, IMG_H);
-    return samplePoints(cx.getImageData(0, 0, IMG_W, IMG_H).data);
+    return samplePoints(cx.getImageData(0, 0, IMG_W, IMG_H).data, colors);
   };
   if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return onMain();
   return new Promise((resolve) => {
@@ -119,7 +121,7 @@ export function samplePeriod(src) {
     const done = (v) => (w.terminate(), resolve(v));
     w.onmessage = ({ data }) => (data.pts ? done(data.pts) : done(onMain()));
     w.onerror = () => done(onMain());
-    w.postMessage({ src: url });
+    w.postMessage({ src: url, colors });
   });
 }
 
@@ -129,7 +131,8 @@ const breathe = () => new Promise((r) => requestAnimationFrame(() => setTimeout(
 export async function createPeriod(host, sampled) {
   // ── the capture's points ───────────────────────────────────
   const { pos, col, size, alpha, seed } = await sampled;
-  const ORANGE = new THREE.Color("#ff5a1f");
+  const ACCENT = token("--orange", "#ff5a1f");
+  const ORANGE = new THREE.Color(ACCENT);
 
   const pointUniforms = {
     uTime: { value: 0 },
@@ -174,10 +177,10 @@ export async function createPeriod(host, sampled) {
   // the corners, white headlamps throwing beams, tail lamps that go white in reverse
   const car = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: "#ff5a1f",
+    color: ACCENT,
     roughness: 0.42,
     metalness: 0.15,
-    emissive: "#ff5a1f",
+    emissive: ACCENT,
     emissiveIntensity: 0.04,
     transparent: true,
   });
@@ -396,7 +399,7 @@ export async function createPeriod(host, sampled) {
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(FUT_PTS * 3), 3));
     g.setDrawRange(0, 0);
     const m = new THREE.LineBasicMaterial({
-      color: i === 0 ? ORANGE : new THREE.Color("#5a74ff"),
+      color: i === 0 ? ORANGE : new THREE.Color(token("--fan", "#5a74ff")),
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,

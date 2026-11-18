@@ -78,10 +78,10 @@
   transition: background 0.3s ease;
 }
 @media (hover: hover) {
-  .te__name input:hover { background: rgb(255 255 255 / 0.05); }
+  .te__name input:hover { background: color-mix(in srgb, var(--white) 5%, transparent); }
 }
-.te__name input:focus { background: rgb(255 255 255 / 0.08); }
-.te__name input::selection { background: var(--blue); color: var(--white); }
+.te__name input:focus { background: color-mix(in srgb, var(--white) 8%, transparent); }
+.te__name input::selection { background: var(--blue); color: var(--plate-text); }
 
 /* actions on the right; what just happened appears to their left */
 .te__bar {
@@ -124,7 +124,7 @@
   min-width: 0;
   height: clamp(480px, calc(100vh - 150px), 1400px);
   height: clamp(480px, calc(100svh - 150px), 1400px);
-  background: #0d0d0d;
+  background: color-mix(in srgb, var(--white) 3.2%, var(--ink));
 }
 .te__cm { height: 100%; }
 .te__cm .cm-editor { height: 100%; }
@@ -145,7 +145,7 @@
 .te__prompt {
   font: 300 clamp(28px, 3.2vw, 56px) / 1.05 var(--serif);
   letter-spacing: -0.015em;
-  color: var(--white);
+  color: var(--plate-text);
   transform: translateY(14px);
   transition: transform 0.6s var(--ease);
 }
@@ -159,7 +159,7 @@
 /* a tap shouldn't leave a hover behind: no orange on an action, no half-lit option */
 @media (hover: none) {
   .te .u-action:hover:not(:focus-visible) { background-position: 100% 0; }
-  .te .u-seg > button:hover:not([aria-pressed="true"]) { color: rgb(255 255 255 / 0.42); }
+  .te .u-seg > button:hover:not([aria-pressed="true"]) { color: color-mix(in srgb, var(--white) 66%, transparent); }
 }
 
 @media (max-width: 760px) {

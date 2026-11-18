@@ -1,8 +1,9 @@
 /*
   CodeMirror, set up by hand so every piece of it is chosen: no fold arrows,
-  no completion icons, no stock theme. The colours are the site's: white on
-  near-black, greys for structure, the lifted blue for keywords, orange once
-  (literals and the caret), deep blue under a selection.
+  no completion icons, no stock theme. The colours are the site's palette
+  tokens: text on the page colour, greys for structure, a lifted blue for
+  keywords, the accent once (literals and the caret), the band colour under a
+  selection.
 */
 import {
   EditorView,
@@ -40,11 +41,17 @@ import {
 import { tags as t } from '@lezer/highlight';
 import type { Lang } from './doc';
 
-const white = '#ffffff';
-const blue = '#0a2cf0';
-const lifted = '#5a74ff';
-const orange = '#ff5a1f';
-const grey = (a: number) => `rgb(255 255 255 / ${a})`;
+// colours come from the site's palette tokens (site.css), so the editor follows a palette switch live
+const white = 'var(--white)';
+const blue = 'var(--blue)';
+const onBlue = 'var(--plate-text)';
+const orange = 'var(--orange)';
+const lifted = 'var(--keyword)';
+const grey = (a: number) => `color-mix(in srgb, var(--white) ${+(a * 100).toFixed(1)}%, transparent)`;
+// text greys keep their order but never drop below 4.5:1 on any palette's page colour
+const ink = (a: number) => grey(+(0.64 + (Math.max(a, 0.22) - 0.22) * (0.36 / 0.78)).toFixed(3));
+const tint = (c: string, a: number) => `color-mix(in srgb, ${c} ${a}%, transparent)`;
+const raised = (a: number) => `color-mix(in srgb, var(--white) ${a}%, var(--ink))`;
 const mono = '"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 
 /* an action in a panel reads like .u-action: a word the orange runs through */
@@ -81,7 +88,7 @@ const theme = EditorView.theme(
     '.cm-content:focus-visible': { outline: 'none' },
     '.cm-line': { padding: '0 var(--te-pad-x) 0 0' },
 
-    '.cm-gutters': { backgroundColor: 'transparent', color: grey(0.22), border: 'none' },
+    '.cm-gutters': { backgroundColor: 'transparent', color: ink(0.22), border: 'none' },
     '.cm-lineNumbers .cm-gutterElement': {
       padding: '0 var(--te-num-gap, 1.6em) 0 var(--te-pad-x)',
       minWidth: '0',
@@ -91,40 +98,46 @@ const theme = EditorView.theme(
     '.cm-activeLine': { backgroundColor: 'transparent' },
     '&.cm-focused .cm-activeLine': { backgroundColor: grey(0.022) },
     '.cm-activeLineGutter': { backgroundColor: 'transparent' },
-    '&.cm-focused .cm-activeLineGutter': { color: grey(0.6) },
+    '&.cm-focused .cm-activeLineGutter': { color: ink(0.6) },
 
     '.cm-cursor, .cm-dropCursor': { borderLeft: `2px solid ${orange}`, marginLeft: '-1px' },
-    '.cm-selectionBackground': { backgroundColor: 'rgb(10 44 240 / 0.6)' },
+    '.cm-selectionBackground': { backgroundColor: tint(blue, 26) },
     '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { backgroundColor: blue },
-    // the site paints selected text ink on orange; in here it is white on blue
-    '.cm-line ::selection, .cm-line::selection': { color: `${white} !important` },
-    '.cm-selectionMatch': { backgroundColor: 'rgb(10 44 240 / 0.34)' },
+    // the site paints selected text ink on the accent; in here it sits on the band colour
+    '.cm-line ::selection, .cm-line::selection': { color: `${onBlue} !important` },
+    '.cm-selectionMatch': { backgroundColor: tint(blue, 34) },
     '&.cm-focused .cm-matchingBracket, .cm-matchingBracket': { backgroundColor: grey(0.14), color: white },
+    // a matched bracket reads at full strength over its tint, whatever its syntax colour
+    '.cm-matchingBracket *': { color: 'inherit' },
     '&.cm-focused .cm-nonmatchingBracket, .cm-nonmatchingBracket': { backgroundColor: 'transparent', color: orange },
-    '.cm-searchMatch': { backgroundColor: 'rgb(255 90 31 / 0.24)' },
-    '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'rgb(255 90 31 / 0.55)' },
+    '.cm-searchMatch': { backgroundColor: tint(orange, 24) },
+    '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: orange },
+    '.cm-searchMatch.cm-searchMatch-selected, .cm-searchMatch.cm-searchMatch-selected *': { color: 'var(--ink) !important' },
     '.cm-foldPlaceholder': {
       backgroundColor: grey(0.08),
       border: 'none',
       borderRadius: '0',
-      color: grey(0.6),
+      color: ink(0.6),
       padding: '0 0.4em',
       margin: '0 0.3em',
     },
     '.cm-specialChar': { color: orange },
 
     /* completions: a quiet raised list, the chosen one on blue */
-    '.cm-tooltip': { border: 'none', borderRadius: '0', backgroundColor: '#1a1a1a', color: white },
+    '.cm-tooltip': { border: 'none', borderRadius: '0', backgroundColor: raised(8.4), color: white },
     '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: mono, maxHeight: '15em', minWidth: '14em' },
-    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '3px 14px', lineHeight: '1.6', color: grey(0.62) },
-    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: blue, color: white },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '3px 14px', lineHeight: '1.6', color: ink(0.62) },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: blue, color: onBlue },
+    // on the band colour everything in the chosen row takes the band's own text colour
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText, .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail':
+      { color: onBlue },
     '.cm-completionIcon': { display: 'none' },
     '.cm-completionMatchedText': { textDecoration: 'none', color: white },
-    '.cm-completionDetail': { fontStyle: 'normal', color: grey(0.4), marginLeft: '1em' },
+    '.cm-completionDetail': { fontStyle: 'normal', color: ink(0.4), marginLeft: '1em' },
     '.cm-tooltip-autocomplete-disabled > ul > li[aria-selected]': { backgroundColor: grey(0.1) },
 
     /* find and replace, go to line */
-    '.cm-panels': { backgroundColor: '#141414', color: white, fontFamily: 'var(--sans)' },
+    '.cm-panels': { backgroundColor: raised(6), color: white, fontFamily: 'var(--sans)' },
     '.cm-panels.cm-panels-top': { borderBottom: 'none' },
     '.cm-panels.cm-panels-bottom': { borderTop: 'none' },
     '.cm-panel.cm-search, .cm-panel.cm-gotoLine': {
@@ -150,17 +163,17 @@ const theme = EditorView.theme(
     },
     '.cm-textfield:hover': { backgroundColor: grey(0.08) },
     '.cm-textfield:focus': { backgroundColor: grey(0.11) },
-    '.cm-textfield::placeholder': { color: grey(0.34) },
+    '.cm-textfield::placeholder': { color: ink(0.34) },
     '.cm-button': word,
     '.cm-button:hover, .cm-button:focus-visible': { backgroundPosition: '0 0' },
     '.cm-button:active': { backgroundImage: `linear-gradient(90deg, ${orange} 0 50%, ${white} 50% 100%)` },
     '.cm-panel.cm-search label': {
       fontSize: '15px',
-      color: grey(0.42),
+      color: ink(0.42),
       cursor: 'pointer',
       transition: 'color 0.3s ease',
     },
-    '.cm-panel.cm-search label:hover': { color: grey(0.8) },
+    '.cm-panel.cm-search label:hover': { color: ink(0.8) },
     '.cm-panel.cm-search label:has(input:checked)': { color: white },
     '.cm-panel.cm-search label:has(input:focus-visible)': { outline: `1px solid ${orange}`, outlineOffset: '4px' },
     '.cm-panel.cm-search input[type=checkbox]': {
@@ -180,7 +193,7 @@ const theme = EditorView.theme(
       fontSize: '0',
     },
     '.cm-panel [name=close]::after': { content: '"Close"', fontSize: '15px' },
-    '.cm-panel.cm-gotoLine label': { color: grey(0.74) },
+    '.cm-panel.cm-gotoLine label': { color: ink(0.74) },
   },
   { dark: true },
 );
@@ -190,13 +203,13 @@ const highlight = HighlightStyle.define([
   { tag: t.heading, color: white, fontWeight: '500' },
   { tag: [t.keyword, t.modifier, t.self, t.tagName], color: lifted },
   { tag: [t.number, t.bool, t.null, t.atom, t.unit, t.invalid], color: orange },
-  { tag: [t.string, t.regexp, t.character, t.attributeValue], color: grey(0.6) },
-  { tag: [t.escape, t.special(t.string)], color: grey(0.86) },
-  { tag: t.comment, color: grey(0.32) },
-  { tag: [t.meta, t.documentMeta, t.processingInstruction, t.annotation], color: grey(0.5) },
-  { tag: [t.operator, t.derefOperator], color: grey(0.6) },
-  { tag: [t.punctuation, t.bracket, t.separator, t.angleBracket], color: grey(0.42) },
-  { tag: [t.attributeName, t.propertyName], color: grey(0.8) },
+  { tag: [t.string, t.regexp, t.character, t.attributeValue], color: ink(0.6) },
+  { tag: [t.escape, t.special(t.string)], color: ink(0.86) },
+  { tag: t.comment, color: ink(0.32) },
+  { tag: [t.meta, t.documentMeta, t.processingInstruction, t.annotation], color: ink(0.5) },
+  { tag: [t.operator, t.derefOperator], color: ink(0.6) },
+  { tag: [t.punctuation, t.bracket, t.separator, t.angleBracket], color: ink(0.42) },
+  { tag: [t.attributeName, t.propertyName], color: ink(0.8) },
   { tag: [t.typeName, t.className, t.namespace], color: white },
   { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.variableName)], color: white },
   /* writing */
@@ -204,10 +217,10 @@ const highlight = HighlightStyle.define([
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strikethrough, textDecoration: 'line-through' },
   { tag: t.link, color: lifted },
-  { tag: t.url, color: grey(0.5) },
-  { tag: t.monospace, color: grey(0.72) },
-  { tag: t.quote, color: grey(0.72) },
-  { tag: t.contentSeparator, color: grey(0.42) },
+  { tag: t.url, color: ink(0.5) },
+  { tag: t.monospace, color: ink(0.72) },
+  { tag: t.quote, color: ink(0.72) },
+  { tag: t.contentSeparator, color: ink(0.42) },
 ]);
 
 const phrases = EditorState.phrases.of({
