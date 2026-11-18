@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { Footer } from './Footer';
 import { setAxis } from '../lib/wordmark.js';
-import { blockReady } from '../lib/fonts.js';
+import { blockReady, onFontsChange } from '../lib/fonts.js';
 
 type PageProps = {
   title: ReactNode;
@@ -27,7 +27,11 @@ export function Page({ title, docTitle, children }: PageProps) {
       setAxis(null);
     };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const off = onFontsChange(() => setAxis(null));
+    return () => {
+      window.removeEventListener('resize', onResize);
+      off();
+    };
   }, []);
 
   useEffect(() => {

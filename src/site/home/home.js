@@ -6,7 +6,7 @@ import Snap from "lenis/snap";
 import { runIntro } from "./intro.js";
 import { splitWord, kernWord, fitWord, setAxis, gutter } from "../lib/wordmark.js";
 import { flipify } from "../lib/flip.js";
-import { fontsReady as copyFontsReady, blockReady } from "../lib/fonts.js";
+import { fontsReady as copyFontsReady, blockReady, onFontsChange } from "../lib/fonts.js";
 import { attachSwap } from "../lib/swap.js";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
@@ -75,6 +75,13 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
   }
   const blockIn = blockReady().then(fitAll);
   const allIn = Promise.all([blockIn, copyFontsReady()]).then(fitAll);
+  // a face that lands late (or swaps in) changes the wordmarks' widths: fit again
+  cleanups.push(
+    onFontsChange(() => {
+      fitAll();
+      if (!html.classList.contains("is-intro")) ScrollTrigger.refresh();
+    })
+  );
 
   // ── smooth scroll ─────────────────────────────────────────
   const lenis = new Lenis({ lerp: 0.075, wheelMultiplier: 0.95 });

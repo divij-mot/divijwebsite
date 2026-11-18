@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Flip } from './Flip';
 import { splitWord, kernWord, fitWord, gutter } from '../lib/wordmark.js';
-import { blockReady } from '../lib/fonts.js';
+import { blockReady, onFontsChange } from '../lib/fonts.js';
 import { attachSwap } from '../lib/swap.js';
 
 /** The blue plate: email, links, and MOTWANI edge to edge. */
@@ -29,7 +29,11 @@ export function Footer() {
       fit();
     };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const off = onFontsChange(fit);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      off();
+    };
   }, []);
 
   return (

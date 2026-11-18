@@ -68,6 +68,14 @@ const camEase = gsap.parseEase("power2.out");
 export function runIntro({ heroWord, fontsReady, onReveal }) {
   return new Promise((resolve) => {
     const root = document.querySelector(".intro");
+    let revealed = false;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      onReveal?.();
+    };
+    let ended = false;
+    let tl = null;
     const $ = (s) => root.querySelector(s);
     const $$ = (s) => [...root.querySelectorAll(s)];
 
@@ -92,6 +100,30 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // Everything below is laid out for this width. If it changes mid-intro (an
+    // in-app browser handing the page over, a window still settling), the word
+    // would play at the wrong size and off screen: cut straight to the page.
+    function end() {
+      if (ended) return;
+      ended = true;
+      window.removeEventListener("resize", onWidth);
+      heroWord.style.visibility = "visible";
+      root.remove();
+      if (import.meta.env.DEV && window.__intro) window.__intro.doneAt = performance.now();
+      resolve();
+    }
+    function onWidth() {
+      if (ended || Math.abs(window.innerWidth - vw) < 8) return;
+      gsap.ticker.remove(tick);
+      load.kill();
+      camIn.kill();
+      breath.kill();
+      tl?.kill();
+      reveal();
+      end();
+    }
+    window.addEventListener("resize", onWidth);
     board.width = Math.round(vw * dpr);
     board.height = Math.round(vh * dpr);
     const ctx = board.getContext("2d");
@@ -310,7 +342,7 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
       fontsReady.then(() => (window.__intro.fontsAt = performance.now()));
     }
 
-    Promise.all([load.then(), fontsReady]).then(open);
+    Promise.all([load.then(), fontsReady]).then(() => !ended && open());
 
     // ─────────────────────────────────────────────────────────
     // 1–4 · Wake → scene → settle
@@ -638,7 +670,7 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
       const p0 = camP.p;
       camIn.kill();
 
-      const tl = gsap.timeline({
+      tl = gsap.timeline({
         onUpdate() {
           step();
           drawBands();
@@ -703,18 +735,23 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
         root.style.pointerEvents = "none";
       }, `open+=${RESOLVE + 1.0}`);
 
-      const hr = heroWord.getBoundingClientRect();
-      const heroF = parseFloat(getComputedStyle(heroWord).fontSize);
-      const tx = hr.left + hr.width / 2 - vw / 2;
-      const ty = hr.top + hr.height / 2 - vh / 2;
+      // read when the settle starts, so a late refit of the hero is honoured
+      const hero = () => {
+        const hr = heroWord.getBoundingClientRect();
+        return {
+          f: parseFloat(getComputedStyle(heroWord).fontSize),
+          x: hr.left + hr.width / 2 - vw / 2,
+          y: hr.top + hr.height / 2 - vh / 2,
+        };
+      };
 
       // the word swings level in space — a little tilt through the turn — and
       // lands exactly on the hero wordmark
       gsap.set(stage, { transformPerspective: persp, transformOrigin: "50% 50%" });
       const SETTLE = 0.95;
       const land = "power2.inOut";
-      tl.to(sc, { x: tx, y: ty, duration: SETTLE, ease: land }, "settle")
-        .to(rigs, { rotation: 0, scale: heroF / F, duration: SETTLE, ease: land }, "settle")
+      tl.to(sc, { x: () => hero().x, y: () => hero().y, duration: SETTLE, ease: land }, "settle")
+        .to(rigs, { rotation: 0, scale: () => hero().f / F, duration: SETTLE, ease: land }, "settle")
         .to(words, { skewX: 0, duration: SETTLE, ease: land }, "settle")
         .to(stage, {
           keyframes: [
@@ -722,13 +759,8 @@ export function runIntro({ heroWord, fontsReady, onReveal }) {
             { rotationX: 0, rotationY: 0, duration: SETTLE * 0.55, ease: "power2.out" },
           ],
         }, "settle")
-        .call(() => onReveal?.(), null, "settle+=0.5")
-        .add(() => {
-          heroWord.style.visibility = "visible";
-          root.remove();
-          if (import.meta.env.DEV) window.__intro.doneAt = performance.now();
-          resolve();
-        }, `settle+=${SETTLE + 0.02}`);
+        .call(reveal, null, "settle+=0.5")
+        .add(end, `settle+=${SETTLE + 0.02}`);
 
       sample();
       step();
