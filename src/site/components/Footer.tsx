@@ -3,15 +3,11 @@ import { Link } from 'react-router-dom';
 import { Flip } from './Flip';
 import { splitWord, kernWord, fitWord, gutter } from '../lib/wordmark.js';
 import { blockReady, onFontsChange } from '../lib/fonts.js';
-import { attachSwap } from '../lib/swap.js';
 
 /** The blue plate: email, links, and MOTWANI edge to edge. */
 export function Footer() {
   const word = useRef<HTMLSpanElement>(null);
-  const plate = useRef<HTMLElement>(null);
 
-  // "berkeley" in the email: a lens onto the other palette, a click switches to it
-  useLayoutEffect(() => attachSwap(plate.current!), []);
 
   useLayoutEffect(() => {
     const el = word.current!;
@@ -37,17 +33,11 @@ export function Footer() {
   }, []);
 
   return (
-    <footer className="contact" ref={plate}>
+    <footer className="contact">
       <div className="row">
         <span aria-hidden="true" />
         <div>
-          <p className="contact__mail serif">
-            divij&nbsp;[at]{' '}
-            <button type="button" className="swap" data-swap>
-              berkeley
-            </button>{' '}
-            [dot]&nbsp;edu
-          </p>
+          <p className="contact__mail serif">divij&nbsp;[at] berkeley [dot]&nbsp;edu</p>
           <p className="links">
             <a href="https://github.com/divij-mot"><Flip>GitHub</Flip></a>
             <a href="https://www.linkedin.com/in/divijmotwani/"><Flip>LinkedIn</Flip></a>

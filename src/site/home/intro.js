@@ -68,7 +68,13 @@ const CAM = { rotationX: 24, rotationZ: -4, scale: 1.15 };
 const CAM_T = 2.1;
 const camEase = gsap.parseEase("power2.out");
 
-export function runIntro({ heroWord, fontsReady, onReveal, root: introRoot }) {
+/**
+ * Play the opening.
+ *   root     — the .intro element to play in (default: the page's own)
+ *   restart  — returns a fresh opening's promise; used when the window's width
+ *              settles somewhere new in the first moments (see onWidth)
+ */
+export function runIntro({ heroWord, fontsReady, onReveal, root: introRoot, restart }) {
   return new Promise((resolve) => {
     const root = introRoot || document.querySelector(".intro");
     scope = root;
@@ -105,9 +111,10 @@ export function runIntro({ heroWord, fontsReady, onReveal, root: introRoot }) {
     const vh = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    // Everything below is laid out for this width. If it changes mid-intro (an
-    // in-app browser handing the page over, a window still settling), the word
-    // would play at the wrong size and off screen: cut straight to the page.
+    // Everything below is laid out for this width. A browser pane sliding open
+    // or a window still settling can change it in the first moments; then,
+    // once it has stopped changing, the opening starts over at the new size.
+    // Later on it plays through: the word lands on the hero wherever it is.
     function end() {
       if (ended) return;
       ended = true;
@@ -117,15 +124,28 @@ export function runIntro({ heroWord, fontsReady, onReveal, root: introRoot }) {
       if (import.meta.env.DEV && window.__intro) window.__intro.doneAt = performance.now();
       resolve();
     }
+    const born = performance.now();
+    let settle = 0;
+    function early() {
+      // before the word has formed: the dark board, or the first second after it opens
+      return !tl || tl.time() < 1;
+    }
     function onWidth() {
-      if (ended || Math.abs(window.innerWidth - vw) < 8) return;
-      gsap.ticker.remove(tick);
-      load.kill();
-      camIn.kill();
-      breath.kill();
-      tl?.kill();
-      reveal();
-      end();
+      if (ended || !restart || !early()) return;
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        if (ended || !early() || Math.abs(window.innerWidth - vw) < 8) return;
+        ended = true;
+        window.removeEventListener("resize", onWidth);
+        gsap.ticker.remove(tick);
+        load.kill();
+        camIn.kill();
+        breath.kill();
+        tl?.kill();
+        root.remove();
+        if (import.meta.env.DEV) console.info("intro: width settled at", window.innerWidth, "after", Math.round(performance.now() - born), "ms; starting over");
+        resolve(restart());
+      }, 140);
     }
     window.addEventListener("resize", onWidth);
     board.width = Math.round(vw * dpr);

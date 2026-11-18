@@ -5,22 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Divij Motwani</title>
     <meta name="description" content="Divij Motwani — EECS at UC Berkeley." />
-    <meta name="theme-color" content="#373f43" />
+    <meta name="theme-color" content="#002676" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
-      html, body { background: #373f43; }
-      html[data-palette="berkeley"], html[data-palette="berkeley"] body { background: #002676; }
+      html, body { background: #002676; }
     </style>
     <script>
-      // the palette a visitor last switched to (the Berkeley lens), before first paint
-      try {
-        if (localStorage.getItem('palette') === 'berkeley') {
-          document.documentElement.setAttribute('data-palette', 'berkeley');
-          document.querySelector('meta[name="theme-color"]').content = '#002676';
-          document.querySelector('link[rel="icon"]').href = '/favicon-berkeley.svg';
-        }
-      } catch (e) {}
+      // the palette switch is gone; forget a choice an earlier version saved
+      try { localStorage.removeItem('palette'); } catch (e) {}
       // a reload always starts at the top, under the intro — never mid-page
       if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
       window.scrollTo(0, 0);

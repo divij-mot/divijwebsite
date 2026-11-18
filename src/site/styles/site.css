@@ -19,40 +19,13 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Palettes. Every colour on the site, the intro board and both 3D
-   scenes come from these. The names are historical: --blue is the
-   band colour, --orange the accent, --white the text.
+   Palette: UC Berkeley's brand colours (brand.berkeley.edu). Berkeley
+   Blue and California Gold, with Blue Medium, Blue Light, Blue Dark and
+   Gold Light from the same guide. Every colour on the site, the intro
+   board and both 3D scenes come from these. The names are historical:
+   --blue is the band colour, --orange the accent, --white the text.
    ───────────────────────────────────────────────────────────── */
-
-/* Machine Grey: RAL 7016 anthracite, 9003 signal white, 7035 light grey,
-   1018 zinc yellow, 5005 signal blue */
-:root,
-[data-palette="machine"] {
-  --ink: #373f43;
-  --white: #f4f8f4;
-  --blue: #cbd0cc;
-  --orange: #faca30;
-  --accent: var(--orange);
-  --plate-text: #373f43;
-  --plate-accent: #154889;
-  --disc: #f4f8f4;
-  --disc-off: #2e3234;
-  --points: #f4f8f4;
-  --puck: #154889;
-  --puck-light: #3d7bd1;
-  --fan: #cbd0cc;
-  --stage: #373f43;
-  --board-off: 66 74 78;
-  --glow: 250 202 48;
-  --glow-dim: 140 125 66;
-  --cube-lit: 254 239 193;
-  --cube-shade: 88 71 17;
-  --keyword: #a6b9d2;
-}
-
-/* Berkeley: Berkeley Blue and California Gold, with Blue Medium, Blue Light,
-   Blue Dark and Gold Light from the same guide (brand.berkeley.edu) */
-[data-palette="berkeley"] {
+:root {
   --ink: #002676;
   --white: #ffffff;
   --blue: #fdb515;
@@ -243,45 +216,6 @@ button:focus-visible .f { transform: perspective(3em) rotateX(180deg); }
 }
 .intro__word { display: block; color: var(--ink); }
 .intro__bands .intro__word { color: var(--white); }
-
-/* ─────────────────────────────────────────────────────────────
-   The Berkeley lens (lib/swap.js): the word opens an orb onto the
-   other palette; a click switches the site to it
-   ───────────────────────────────────────────────────────────── */
-.swap {
-  font: inherit;
-  letter-spacing: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.lens { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
-.lens__view {
-  position: absolute;
-  inset: 0;
-  background: var(--ink);
-  color: var(--white);
-  will-change: clip-path, transform;
-}
-.lens__page { position: absolute; left: 0; top: 0; margin: 0; }
-/* a glass orb: a hairline rim, light from above, a shadow under it */
-.lens__rim {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: 50%;
-  background: radial-gradient(58% 44% at 33% 22%, rgb(255 255 255 / 0.16), transparent 62%);
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.3),
-    inset 0 16px 30px -12px rgb(255 255 255 / 0.2),
-    inset 0 -20px 36px -14px rgb(0 0 0 / 0.4),
-    0 0 0 1px rgb(0 0 0 / 0.16),
-    0 26px 64px -20px rgb(0 0 0 / 0.62);
-}
 
 /* ─────────────────────────────────────────────────────────────
    Hero
