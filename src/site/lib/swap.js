@@ -42,10 +42,13 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * Wire every [data-swap] word inside `root`.
- *   onSwitch(name) — called once the site has switched (home replays the intro)
+ *   onSwitch(name)  — called once the site has switched by the plain swell
+ *   intoIntro(name, { x, y, r }) — if given, a click hands over to it instead:
+ *                     the home page opens a bubble into the intro in the new
+ *                     palette. Returns a promise for when it has played.
  * Returns a function that removes everything it added.
  */
-export function attachSwap(root, { onSwitch } = {}) {
+export function attachSwap(root, { onSwitch, intoIntro } = {}) {
   let lens = null; // { el, view, rim, clone, host, word, x, y, tx, ty, r, zoom, closing }
   let busy = false;
   const pointer = { x: -1e4, y: -1e4 };
@@ -136,6 +139,23 @@ export function attachSwap(root, { onSwitch } = {}) {
       setPalette(name);
       busy = false;
       onSwitch?.(name);
+      return;
+    }
+    if (intoIntro) {
+      // the orb hands over to the bubble at the same spot and size, and fades
+      const l = lens && !lens.closing ? lens : null;
+      const from = l ? { x: l.x, y: l.y, r: l.r } : { x, y, r: 0 };
+      if (lens) {
+        const old = lens;
+        old.frozen = true;
+        old.closing = true;
+        gsap.killTweensOf(old);
+        gsap.to(old.el, { opacity: 0, duration: 0.3, ease: "power1.out", onComplete: () => lens === old && remove() });
+      }
+      Promise.resolve(intoIntro(name, from)).finally(() => {
+        busy = false;
+        label();
+      });
       return;
     }
     const l = lens && !lens.closing && lens.word === word ? lens : (remove(), build(word, x, y));

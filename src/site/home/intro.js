@@ -18,7 +18,10 @@ import { gsap } from "gsap";
                the hero wordmark.
 */
 
-const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// colours are read off the intro's own element, so a copy tagged with another
+// palette (the Berkeley bubble) plays in that palette over an unchanged page
+let scope = null;
+const css = (n) => getComputedStyle(scope || document.documentElement).getPropertyValue(n).trim();
 const rgb3 = (n) => css(n).split(/[\s,]+/).map(Number);
 const deg = (r) => (r * 180) / Math.PI;
 const rad = (d) => (d * Math.PI) / 180;
@@ -65,9 +68,10 @@ const CAM = { rotationX: 24, rotationZ: -4, scale: 1.15 };
 const CAM_T = 2.1;
 const camEase = gsap.parseEase("power2.out");
 
-export function runIntro({ heroWord, fontsReady, onReveal }) {
+export function runIntro({ heroWord, fontsReady, onReveal, root: introRoot }) {
   return new Promise((resolve) => {
-    const root = document.querySelector(".intro");
+    const root = introRoot || document.querySelector(".intro");
+    scope = root;
     let revealed = false;
     const reveal = () => {
       if (revealed) return;

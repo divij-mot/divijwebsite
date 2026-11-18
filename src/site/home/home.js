@@ -7,7 +7,7 @@ import { runIntro } from "./intro.js";
 import { splitWord, kernWord, fitWord, setAxis, gutter } from "../lib/wordmark.js";
 import { flipify } from "../lib/flip.js";
 import { fontsReady as copyFontsReady, blockReady, onFontsChange } from "../lib/fonts.js";
-import { attachSwap } from "../lib/swap.js";
+import { attachSwap, setPalette } from "../lib/swap.js";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -37,6 +37,8 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
   const pushtCode = import("./work/pusht.js");
   [periodCode, periodPoints, pushtCode].forEach((p) => p.catch(() => {}));
 
+  // a pristine copy of the opening, for the Berkeley bubble to play again later
+  const introTemplate = $(".intro")?.cloneNode(true);
   if (!intro) $(".intro")?.remove();
   html.classList.toggle("is-intro", intro);
   html.classList.add("reveals-pending");
@@ -59,7 +61,12 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
   cleanups.push(() => root.removeEventListener("click", onClick));
 
   // "Berkeley", top and bottom: a lens onto the other palette
-  cleanups.push(attachSwap(root, { onSwitch: (name) => onPalette?.(name) }));
+  cleanups.push(
+    attachSwap(root, {
+      onSwitch: (name) => onPalette?.(name),
+      intoIntro: (name, at) => replayInto(name, at),
+    })
+  );
 
   // ── fitting ───────────────────────────────────────────────
   const heroWord = $(".hero__word");
@@ -188,6 +195,7 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
 
   // Both scenes are built one after the other while the reader is still up
   // top, then each draws in together with its own text.
+  const sceneFx = [];
   async function buildScenes() {
     const periodHost = $(".work__media--period");
     const pushtHost = $(".work__media--pusht");
@@ -198,12 +206,14 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
       if (dead) return field.dispose();
       scenes.push(field);
       ctx.add(() =>
-        ScrollTrigger.create({
-          trigger: periodHost.closest(".work"),
-          start: "top 82%",
-          once: true,
-          onEnter: () => gsap.to(field.uniforms.uReveal, { value: 1, duration: 2.6, ease: "power2.inOut" }),
-        })
+        sceneFx.push(
+          ScrollTrigger.create({
+            trigger: periodHost.closest(".work"),
+            start: "top 82%",
+            once: true,
+            onEnter: () => gsap.to(field.uniforms.uReveal, { value: 1, duration: 2.6, ease: "power2.inOut" }),
+          })
+        )
       );
     } catch (e) {
       console.error("period scene", e);
@@ -215,12 +225,14 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
       if (dead) return board.dispose();
       scenes.push(board);
       ctx.add(() =>
-        gsap.from(pushtHost, {
-          clipPath: "inset(0 100% 0 0)",
-          duration: 1.4,
-          ease: "expo.inOut",
-          scrollTrigger: { trigger: pushtHost.closest(".work"), start: "top 82%" },
-        })
+        sceneFx.push(
+          gsap.from(pushtHost, {
+            clipPath: "inset(0 100% 0 0)",
+            duration: 1.4,
+            ease: "expo.inOut",
+            scrollTrigger: { trigger: pushtHost.closest(".work"), start: "top 82%" },
+          })
+        )
       );
     } catch (e) {
       console.error("push-T scene", e);
@@ -284,6 +296,62 @@ export function initHome(root, { playIntro = false, section = null, navigate, on
       lenis.scrollTo(target, { immediate: true, force: true });
       ScrollTrigger.update();
     }
+  }
+
+  // ── the Berkeley lens, clicked ────────────────────────────
+  // A bubble opens from the word into the opening, already playing in the new
+  // colours over the page as it is. Only once it fills the screen does the page
+  // underneath change palette, go back to the top and rebuild its scenes; then
+  // the word lands on the new hero and the text rises again.
+  let replaying = false;
+  async function replayInto(name, { x, y, r = 0 }) {
+    if (dead || replaying || !introTemplate) {
+      setPalette(name);
+      onPalette?.(name);
+      return;
+    }
+    replaying = true;
+    const el = introTemplate.cloneNode(true);
+    el.setAttribute("data-palette", name);
+    const clip = (rad) => (el.style.clipPath = `circle(${Math.max(0, rad)}px at ${x}px ${y}px)`);
+    clip(r);
+    root.prepend(el);
+    // the copy's two DIVIJs get the same letters and spacing as the first opening
+    el.querySelectorAll("[data-word]").forEach((w) => (splitWord(w), kernWord(w)));
+    lenis.stop();
+    const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 4;
+    const bubble = { r };
+    const covered = new Promise((done) =>
+      gsap.to(bubble, { r: far, duration: 1.05, ease: "expo.inOut", onUpdate: () => clip(bubble.r), onComplete: done })
+    );
+    const played = runIntro({ heroWord, fontsReady: blockIn, root: el, onReveal: () => covered.then(reveal) });
+    await covered;
+    if (dead) return;
+    el.style.clipPath = "";
+    // out of sight now
+    setPalette(name);
+    html.classList.add("is-intro");
+    heroWord.style.visibility = "hidden";
+    gsap.set([statement, aside, ...heroFoot], { opacity: 0 });
+    lenis.scrollTo(0, { immediate: true, force: true });
+    window.scrollTo(0, 0);
+    ScrollTrigger.update();
+    // a tween (push-T's wipe) is reverted so its host shows again; a trigger is killed
+    sceneFx.splice(0).forEach((fx) => {
+      if (typeof fx.targets === "function") {
+        fx.scrollTrigger?.kill();
+        fx.revert();
+      } else fx.kill();
+    });
+    scenes.splice(0).forEach((s) => s.dispose?.());
+    buildScenes();
+    await played;
+    if (dead) return;
+    html.classList.remove("is-intro");
+    lenis.start();
+    ScrollTrigger.refresh();
+    if (snap) setDetents();
+    replaying = false;
   }
 
   // ── boot ──────────────────────────────────────────────────
