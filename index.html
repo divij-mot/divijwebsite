@@ -2,49 +2,75 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Divij Motwani</title>
+    <meta name="description" content="Divij Motwani — EECS at UC Berkeley." />
+    <meta name="theme-color" content="#050505" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      html, body { background: #050505; }
+    </style>
+    <script>
+      // a reload always starts at the top, under the intro — never mid-page
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+      window.scrollTo(0, 0);
+      // the opening needs these before the first frame on "/"
+      if (location.pathname === '/' && !/[?&]skip/.test(location.search)) {
+        document.documentElement.className = 'is-intro reveals-pending';
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <!-- copy faces load without blocking first paint; the intro only needs the self-hosted block face -->
+    <!-- requested with CORS so they still load under the converter's cross-origin isolation -->
+    <link
+      rel="stylesheet"
+      data-fonts
+      crossorigin="anonymous"
+      media="print"
+      onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;1,6..72,300&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      data-fonts
+      crossorigin="anonymous"
+      media="print"
+      onload="this.media='all'"
+      href="https://api.fontshare.com/v2/css?f[]=switzer@300,400&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>
     <script>
-      // SharedArrayBuffer / FFmpeg need COOP+COEP. The previous worker reloaded
-      // forever on Safari and iOS, which never isolate with COEP credentialless.
+      // Cross-origin isolation (for multi-threaded FFmpeg) is only wanted on the
+      // file converter, and never on Safari/iOS, which loop with COEP credentialless.
+      // Everywhere else, clear any isolation worker an earlier version installed.
       (function () {
         var ua = navigator.userAgent || '';
-        var isiOS = /iP(hone|ad|od)/.test(ua) ||
-          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var isiOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         var isSafari = isiOS || (/Safari/i.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox|Android/i.test(ua));
-        var isBuilder = location.pathname.indexOf('/builder') === 0;
-
-        function reloadOnce(key) {
-          try {
-            if (sessionStorage.getItem(key)) return;
-            sessionStorage.setItem(key, '1');
-          } catch (e) {}
-          location.reload();
-        }
-
-        function dropIsolation() {
-          if (!('serviceWorker' in navigator)) return;
-          navigator.serviceWorker.getRegistrations().then(function (regs) {
-            var had = regs.length > 0 || !!navigator.serviceWorker.controller;
-            Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
-              if (had) reloadOnce('coiDropped');
-            });
-          });
-        }
-
-        if (isBuilder || isSafari) {
-          dropIsolation();
+        var wantsIsolation = location.pathname.indexOf('/tools/file-converter') === 0 && !isSafari;
+        if (!('serviceWorker' in navigator)) return;
+        if (wantsIsolation) {
+          var s = document.createElement('script');
+          s.src = '/coi-serviceworker.js';
+          document.body.appendChild(s);
           return;
         }
-
-        var s = document.createElement('script');
-        s.src = '/coi-serviceworker.js';
-        document.body.appendChild(s);
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          var had = regs.length > 0 || !!navigator.serviceWorker.controller;
+          Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
+            if (!had) return;
+            try {
+              if (sessionStorage.getItem('coiDropped')) return;
+              sessionStorage.setItem('coiDropped', '1');
+            } catch (e) {}
+            location.reload();
+          });
+        });
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

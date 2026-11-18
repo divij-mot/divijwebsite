@@ -1,0 +1,615 @@
+/* ─────────────────────────────────────────────────────────────
+   Tokens
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --ink: #050505;
+  --white: #ffffff;
+  --blue: #0a2cf0;
+  --orange: #ff5a1f;
+  --paper: #f4f4ef;
+
+  --block: "Archivo Variable", "Helvetica Neue", Arial, sans-serif;
+  /* type: Newsreader (light, optical sizes) over Switzer */
+  --serif: "Newsreader", Georgia, serif;
+  --serif-w: 300;
+  --serif-vs: normal;
+  --serif-ls: -0.012em;
+  --sans: "Switzer", "Helvetica Neue", Arial, sans-serif;
+
+  --gutter: clamp(16px, 2vw, 32px);
+  /* x of the first I in the wordmark — measured in JS; the page hangs off it */
+  --axis: 22vw;
+  --col: calc(var(--axis) - var(--gutter));
+
+  --ease: cubic-bezier(0.7, 0, 0.2, 1);
+  --accent: var(--orange);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--ink);
+  color: var(--white);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar { display: none; }
+html.is-intro { overflow: hidden; }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+body {
+  opacity: 1;
+  font-family: var(--sans);
+  font-weight: 300;
+  font-size: 17px;
+  line-height: 1.5;
+  background: var(--ink);
+  overflow-x: clip;
+  font-kerning: normal;
+}
+
+a { color: inherit; text-decoration: none; }
+ol, ul { list-style: none; }
+::selection { background: var(--orange); color: var(--ink); }
+:focus-visible { outline: 1px solid var(--orange); outline-offset: 6px; }
+
+.serif {
+  font-family: var(--serif);
+  font-weight: var(--serif-w);
+  font-variation-settings: var(--serif-vs);
+  letter-spacing: var(--serif-ls);
+}
+
+/* one supporting size everywhere; labels sit a step above notes */
+.note {
+  font-size: 15px;
+  line-height: 1.5;
+  text-wrap: pretty;
+  color: rgb(255 255 255 / 0.74);
+}
+.note em { font-style: normal; color: var(--white); }
+
+
+
+/* two columns hung off the wordmark: the D, and everything from the I on */
+.row {
+  display: grid;
+  grid-template-columns: var(--col) minmax(0, 1fr);
+}
+.row > :first-child { padding-right: clamp(16px, 2.4vw, 40px); }
+.row > :only-child { grid-column: 1; }
+
+/* ── Block words ───────────────────────────────────────────── */
+.word {
+  display: inline-block;
+  font-family: var(--block);
+  --wdth: 125;
+  font-variation-settings: "wdth" var(--wdth), "wght" 900;
+  font-weight: 900;
+  line-height: 0.74;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.word .ch {
+  display: inline-block;
+  font-variation-settings: "wdth" var(--wdth), "wght" 900;
+}
+
+/* ── Flip text: every character is a disc ──────────────────── */
+.fw { white-space: nowrap; }
+.f {
+  display: inline-block;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(3em) rotateX(0deg);
+  transition: transform 0.62s var(--ease) calc(var(--i) * 16ms);
+}
+.f > span { display: block; backface-visibility: hidden; }
+.f > span + span {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(180deg);
+  color: var(--accent);
+}
+a:hover .f,
+a:focus-visible .f,
+button:hover .f,
+button:focus-visible .f { transform: perspective(3em) rotateX(180deg); }
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25em 1.15em;
+  color: var(--white);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Intro
+   ───────────────────────────────────────────────────────────── */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--ink);
+  overflow: hidden;
+}
+.intro__board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+}
+.intro__bar {
+  position: absolute;
+  left: 50%;
+  width: 120px;
+  height: 2px;
+  margin-left: -60px;
+  z-index: 3;
+  background: rgb(255 255 255 / 0.16);
+  mix-blend-mode: difference;
+  overflow: hidden;
+  opacity: 0;
+}
+.intro__bar > i {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+.intro__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  visibility: hidden;
+}
+.intro__bg { position: absolute; inset: 0; background: var(--blue); }
+.intro__sliver,
+.intro__bands {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 0 0, 0 0);
+}
+.intro__sliver { background: var(--orange); }
+.intro__bands { background: var(--ink); }
+.intro__rig {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  will-change: transform;
+}
+.intro__word { display: block; color: var(--ink); }
+.intro__bands .intro__word { color: var(--white); }
+
+/* ─────────────────────────────────────────────────────────────
+   Hero
+   ───────────────────────────────────────────────────────────── */
+.hero {
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: var(--gutter);
+  display: flex;
+  flex-direction: column;
+}
+.hero__name {
+  display: flex;
+  line-height: 0;
+  font-weight: inherit;
+}
+.hero__word { visibility: hidden; }
+.hero__word .ch { will-change: transform; }
+
+/* the statement and its aside read as one passage: a lede, then the quieter rest */
+.hero__text {
+  margin-top: clamp(40px, 7vh, 96px);
+  padding-left: var(--col);
+}
+.hero__statement {
+  font-size: clamp(30px, 3.45vw, 64px);
+  line-height: 1.15;
+  max-width: 17em;
+  text-wrap: balance;
+}
+
+.hero__foot {
+  margin-top: auto;
+  padding-top: 10vh;
+  align-items: end;
+}
+.hero__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.hero__mail { color: var(--white); }
+.hero__aside {
+  margin-top: 1.1em;
+  max-width: 26em;
+  font-size: clamp(19px, 1.62vw, 30px);
+  line-height: 1.28;
+  color: rgb(255 255 255 / 0.66);
+  text-wrap: pretty;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Recently
+   ───────────────────────────────────────────────────────────── */
+.recent { padding: 24vh var(--gutter) 24vh; }
+
+.work + .work { margin-top: clamp(120px, 22vh, 280px); }
+/* the title sits on its visual rather than above it */
+.work__head { position: relative; z-index: 2; align-items: start; pointer-events: none; }
+.work__head a { pointer-events: auto; }
+/* note's first line sits on the title's cap line */
+/* the note's first cap line sits on the title's cap line */
+.work__head .note { max-width: 32ch; margin-top: -0.38em; transition: color 0.4s ease; }
+.work__title {
+  justify-self: start;
+  font-size: clamp(44px, 6.25vw, 120px);
+  line-height: 0.95;
+  letter-spacing: -0.022em;
+}
+@media (hover: hover) {
+  .work:has(.work__title:hover) .note { color: var(--white); }
+}
+.work__media {
+  position: relative;
+  margin-top: calc(-0.55 * clamp(44px, 6.25vw, 120px));
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+}
+.work__media canvas { display: block; width: 100% !important; height: 100% !important; }
+/* the board dissolves into the page rather than sitting in a frame */
+.work__media--pusht {
+  cursor: crosshair;
+  -webkit-mask-image: radial-gradient(50% 50% at 50% 50%, #000 58%, transparent 100%);
+  mask-image: radial-gradient(50% 50% at 50% 50%, #000 58%, transparent 100%);
+}
+/* the capture has no edges: it dissolves into the page on every side */
+.work__media--period {
+  cursor: crosshair;
+  -webkit-mask-image: radial-gradient(58% 62% at 50% 50%, #000 52%, transparent 100%);
+  mask-image: radial-gradient(58% 62% at 50% 50%, #000 52%, transparent 100%);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Toolbox
+   ───────────────────────────────────────────────────────────── */
+/* a short index on the same black, in the same grammar as the work */
+.tools { padding: 0 var(--gutter) 26vh; }
+.tool { align-items: baseline; }
+.tool + .tool { margin-top: clamp(6px, 1.2vh, 14px); }
+.tool__name {
+  justify-self: start;
+  font-size: clamp(28px, 3vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+}
+@media (hover: hover) {
+  .tool:has(.tool__name:hover) .note { color: var(--white); }
+}
+.tool .note { transition: color 0.4s ease; }
+
+/* ─────────────────────────────────────────────────────────────
+   Contact — the blue plate
+   ───────────────────────────────────────────────────────────── */
+.contact {
+  background: var(--blue);
+  color: var(--white);
+  padding: 22vh var(--gutter) 0;
+  overflow: clip;
+}
+.contact .note { color: rgb(255 255 255 / 0.85); }
+.contact__mail {
+  display: inline-block;
+  font-size: clamp(36px, 5.4vw, 104px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.contact .links { margin-top: clamp(28px, 5vh, 56px); }
+.contact__name {
+  display: flex;
+  margin-top: clamp(100px, 22vh, 260px);
+  line-height: 0;
+}
+.contact__word { color: var(--white); }
+.contact__word .ch { will-change: transform; }
+.contact__base {
+  padding: 26px 0 clamp(28px, 4.5vh, 48px);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--white);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Small screens — one column
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  :root { --col: 0px; }
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .row > :first-child { padding-right: 0; }
+  .hero__text { padding-left: 0; }
+  .hero__statement { max-width: none; }
+  .hero__foot { row-gap: 28px; }
+  .hero__aside { grid-row: 1; }
+  .work__head { row-gap: 14px; }
+  .work__head .note { grid-row: 2; margin-top: 0; }
+  .work__media { aspect-ratio: 4 / 3; margin-inline: calc(-1 * var(--gutter)); }
+  .tool { row-gap: 4px; }
+  .tool .note { grid-row: 2; }
+  .contact .row { row-gap: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; transition-delay: 0s !important; }
+}
+
+/* ── Title hover: orange runs through the letters, left to right ── */
+@media (hover: hover) {
+  .work__title,
+  .tool__name {
+    background-image: linear-gradient(90deg, var(--orange) 0 50%, var(--white) 50% 100%);
+    background-size: 200% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: background-position 0.9s var(--ease);
+  }
+  .work__title:hover,
+  .tool__name:hover,
+  .work__title:focus-visible,
+  .tool__name:focus-visible { background-position: 0 0; }
+}
+
+/* while lines are rising, titles paint plainly (the fill can't clip moving lines) */
+.is-revealing {
+  background-image: none !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+.work__media { transform-origin: 50% 40%; will-change: transform; }
+@media (max-width: 760px) { .br-wide { display: none; } }
+.reveals-pending .work__head,
+.reveals-pending .tools__list,
+.reveals-pending .contact__mail { visibility: hidden; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   Every other page: the same grammar as the home page.
+   A quiet way home in the first column, the title in the serif on the
+   second, the page itself, then the blue plate with MOTWANI.
+   ═════════════════════════════════════════════════════════════ */
+.page {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+.page__head {
+  padding: clamp(72px, 16vh, 180px) var(--gutter) clamp(40px, 7vh, 80px);
+  align-items: start;
+}
+.page__head .note { max-width: 32ch; margin-top: -0.38em; }
+.page__title {
+  font-size: clamp(48px, 7.4vw, 140px);
+  line-height: 0.95;
+  letter-spacing: -0.022em;
+}
+.page__body {
+  flex: 1;
+  padding: 0 var(--gutter) clamp(120px, 22vh, 260px);
+}
+/* content that hangs off the axis, like the copy on the home page */
+.page__col { margin-left: var(--col); }
+
+/* the footer plate on inner pages: same as home, without the scroll scenes */
+.page .contact { margin-top: 0; }
+.contact__home { color: inherit; transition: opacity 0.4s var(--ease); }
+.contact__home:hover .ch { color: var(--ink); transition: color 0.35s var(--ease) calc(var(--i, 0) * 30ms); }
+
+/* ═════════════════════════════════════════════════════════════
+   UI primitives for the tools. No boxes with borders, no pills, no icons
+   where words will do: fields are quiet fills, actions are words that
+   take the orange, states are colour and type, not chrome.
+   ═════════════════════════════════════════════════════════════ */
+.u-surface { background: #0d0d0d; }
+.u-raised { background: #141414; }
+
+.u-field {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--white);
+  font: 300 17px/1.55 var(--sans);
+  padding: 14px 16px;
+  caret-color: var(--orange);
+  transition: background 0.3s ease;
+}
+.u-field::placeholder { color: rgb(255 255 255 / 0.34); }
+.u-field:hover { background: rgb(255 255 255 / 0.07); }
+.u-field:focus { background: rgb(255 255 255 / 0.09); }
+.u-field:focus-visible { outline: none; }
+textarea.u-field { resize: vertical; min-height: 40vh; }
+select.u-field { padding-right: 36px; background-image: none; cursor: pointer; }
+
+/* an action is a word; hover runs the orange through it, left to right */
+.u-action {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  font: 400 15px/1.4 var(--sans);
+  color: var(--white);
+  background-image: linear-gradient(90deg, var(--orange) 0 50%, currentColor 50% 100%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: background-position 0.7s var(--ease), opacity 0.3s ease;
+}
+.u-action:focus-visible { background-position: 0 0; }
+@media (hover: hover) {
+  .u-action:hover { background-position: 0 0; }
+}
+.u-action:disabled { opacity: 0.32; cursor: default; background-position: 100% 0; }
+/* the main action on a page speaks in the serif */
+.u-action--primary {
+  font: 300 clamp(28px, 2.6vw, 44px) / 1.05 var(--serif);
+  letter-spacing: -0.015em;
+}
+.u-actions { display: flex; flex-wrap: wrap; gap: 0.4em 1.6em; align-items: baseline; }
+
+/* a choice between a few things: the chosen one is white, the rest recede */
+.u-seg { display: flex; flex-wrap: wrap; gap: 0.3em 1.2em; }
+.u-seg > button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  font: 400 15px/1.4 var(--sans);
+  color: rgb(255 255 255 / 0.42);
+  transition: color 0.3s ease;
+}
+@media (hover: hover) {
+  .u-seg > button:hover { color: rgb(255 255 255 / 0.8); }
+}
+.u-seg > button[aria-pressed="true"] { color: var(--white); }
+
+/* drop a file: a quiet field that turns blue under the file */
+.u-drop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: clamp(260px, 42vh, 460px);
+  padding: clamp(24px, 4vw, 56px);
+  background: #0d0d0d;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.45s var(--ease), color 0.45s var(--ease);
+}
+.u-drop__prompt {
+  font: 300 clamp(28px, 3.2vw, 56px) / 1.05 var(--serif);
+  letter-spacing: -0.015em;
+  color: rgb(255 255 255 / 0.86);
+}
+.u-drop .note { margin-top: 1em; }
+.u-drop:hover { background: #121212; }
+.u-drop.is-over { background: var(--blue); }
+.u-drop.is-over .u-drop__prompt,
+.u-drop.is-over .note { color: var(--white); }
+
+.u-progress { position: relative; height: 2px; background: rgb(255 255 255 / 0.1); overflow: hidden; }
+.u-progress > i {
+  position: absolute;
+  inset: 0;
+  background: var(--orange);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+  transition: transform 0.25s linear;
+}
+
+/* a big figure with its label underneath: the serif carries numbers */
+.u-stat__value {
+  font: 300 clamp(44px, 5.6vw, 96px) / 1 var(--serif);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.u-stat__label { margin-top: 0.5em; }
+
+/* status lines: colour carries the state */
+.u-ok { color: var(--white); }
+.u-warn { color: var(--orange); }
+.u-muted { color: rgb(255 255 255 / 0.48); }
+
+@media (max-width: 760px) {
+  .page__head { row-gap: 14px; padding-top: 56px; }
+  .page__head .note { grid-row: 2; margin-top: 0; }
+  .page__col { margin-left: 0; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Writings: the same rows as the work on the home page */
+.writing { align-items: start; }
+.writing + .writing { margin-top: clamp(72px, 14vh, 160px); }
+.writing .note { margin-top: 0.1em; }
+.writing__title { display: inline-block; }
+.writing__desc {
+  margin-top: 0.6em;
+  max-width: 26em;
+  font-size: clamp(19px, 1.62vw, 28px);
+  line-height: 1.28;
+  color: rgb(255 255 255 / 0.66);
+}
+
+/* QuantumPage: while a page is generated for an unknown path */
+.quantum {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--gutter);
+  padding-left: max(var(--gutter), var(--axis));
+}
+.quantum__line {
+  font-size: clamp(40px, 5.6vw, 104px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.quantum__note { margin-top: 1.2em; max-width: 46ch; }
+.quantum__retry { margin-top: 2em; align-self: flex-start; }
+.quantum__bar {
+  position: relative;
+  margin-top: clamp(28px, 4vh, 48px);
+  width: min(420px, 60vw);
+  height: 2px;
+  background: rgb(255 255 255 / 0.1);
+  overflow: hidden;
+}
+.quantum__bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: var(--orange);
+  animation: quantum-run 1.6s var(--ease) infinite;
+}
+@keyframes quantum-run {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(270%); }
+}
+@media (max-width: 760px) {
+  .quantum { padding-left: var(--gutter); }
+}

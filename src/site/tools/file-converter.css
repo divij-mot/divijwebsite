@@ -1,0 +1,195 @@
+/* File Converter. Everything sits on the page grid: the drop field hangs off the
+   second column, each file is a row with its facts in the first. */
+
+.fc-drop {
+  transition: min-height 0.7s var(--ease), background 0.45s var(--ease), color 0.45s var(--ease);
+}
+.fc-drop.is-compact { min-height: clamp(150px, 22vh, 230px); }
+.fc-drop:focus-visible { outline-offset: 0; }
+.fc-when-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .fc-when-pointer { display: none; }
+  .fc-when-touch { display: inline; }
+}
+
+/* ── the bar: counts on the left, the main action on the right ── */
+.fc-list { margin-top: clamp(64px, 11vh, 128px); }
+.fc-bar { align-items: start; }
+.fc-bar > .note { padding-top: 0.75em; }
+.fc-bar__actions { row-gap: 0.6em; }
+.fc-bar__actions .u-action--primary,
+.fc-primary { margin-right: 0.35em; }
+.fc-primary {
+  font-size: clamp(28px, 2.6vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+.fc-num { font-variant-numeric: tabular-nums lining-nums; }
+.fc-families,
+.fc-settings {
+  display: grid;
+  gap: 14px;
+  margin-top: clamp(22px, 3.4vh, 32px);
+  animation: fc-rise 0.6s var(--ease) both;
+}
+.fc-families + .fc-settings { margin-top: clamp(18px, 3vh, 28px); }
+
+/* a seg with a quiet word in front, and a wider gap between kinds of output */
+.fc-seg__lead { font-size: 15px; line-height: 1.4; color: rgb(255 255 255 / 0.74); margin-right: 0.4em; }
+.u-seg > button.fc-gap { margin-left: 1.1em; }
+.u-seg > button:disabled { cursor: default; }
+.u-seg > button:disabled:not([aria-pressed="true"]) { color: rgb(255 255 255 / 0.24); }
+
+.fc-pair { display: flex; flex-wrap: wrap; gap: 14px 2.4em; }
+
+/* quality: a hairline that fills, a short white bar to hold */
+.fc-range { display: flex; align-items: center; gap: 22px; max-width: 34em; }
+.fc-range input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.fc-range input:focus-visible { outline: none; }
+.fc-range input::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(90deg, var(--white) calc(var(--v, 0.8) * 100%), rgb(255 255 255 / 0.16) 0);
+}
+.fc-range input::-moz-range-track { height: 2px; background: rgb(255 255 255 / 0.16); }
+.fc-range input::-moz-range-progress { height: 2px; background: var(--white); }
+.fc-range input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 20px;
+  margin-top: -9px;
+  border: 6px solid transparent;
+  border-top: 0;
+  border-bottom: 0;
+  background: var(--white) content-box;
+  transition: background-color 0.3s ease;
+}
+.fc-range input::-moz-range-thumb {
+  width: 2px;
+  height: 20px;
+  border: 0;
+  border-radius: 0;
+  background: var(--white);
+}
+.fc-range input:hover::-webkit-slider-thumb,
+.fc-range input:focus-visible::-webkit-slider-thumb { background-color: var(--orange); }
+.fc-range input:hover::-moz-range-thumb,
+.fc-range input:focus-visible::-moz-range-thumb { background: var(--orange); }
+.fc-range .note { min-width: 6.5em; color: var(--white); }
+
+.fc-target .u-field {
+  max-width: 15em;
+  padding: 10px 14px;
+  font-size: 15px;
+  -moz-appearance: textfield;
+}
+.fc-target .u-field::-webkit-outer-spin-button,
+.fc-target .u-field::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ── a file ── */
+.fc-rows { margin-top: clamp(72px, 12vh, 136px); }
+.fc-item {
+  display: grid;
+  grid-template-columns: var(--col) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "aside name"
+    "aside body";
+  align-items: start;
+  animation: fc-rise 0.7s var(--ease) both;
+}
+.fc-item + .fc-item { margin-top: clamp(56px, 9vh, 104px); }
+.fc-aside { grid-area: aside; padding-right: clamp(16px, 2.4vw, 40px); }
+.fc-aside > .note { padding-top: 0.55em; }
+.fc-name {
+  grid-area: name;
+  min-width: 0;
+  font-size: clamp(28px, 2.6vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.4s ease;
+}
+.fc-item.is-queued .fc-name { color: rgb(255 255 255 / 0.6); }
+.fc-body { grid-area: body; display: grid; gap: 18px; margin-top: 18px; min-width: 0; }
+.fc-state { display: grid; gap: 12px; max-width: 40em; animation: fc-rise 0.5s var(--ease) both; }
+.fc-state .note em { overflow-wrap: anywhere; }
+
+.fc-thumb { margin-top: 20px; }
+.fc-thumb img,
+.fc-thumb video {
+  display: block;
+  max-width: min(100%, 200px);
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  animation: fc-fade 0.6s var(--ease) both;
+}
+
+/* while files are over the window and the field is out of sight */
+.fc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  pointer-events: none;
+  animation: fc-fade 0.35s var(--ease) both;
+}
+.fc-overlay .u-drop__prompt {
+  font-size: clamp(48px, 7.4vw, 140px);
+  line-height: 0.95;
+  letter-spacing: -0.022em;
+  color: var(--white);
+}
+
+@keyframes fc-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fc-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .fc-bar { row-gap: 10px; }
+  .fc-bar > .note { padding-top: 0; }
+  .fc-item {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      "name"
+      "aside"
+      "body";
+  }
+  .fc-aside {
+    padding-right: 0;
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .fc-aside > .note { padding-top: 0; }
+  .fc-thumb { margin-top: 4px; flex: none; }
+  .fc-thumb img,
+  .fc-thumb video { max-width: 96px; max-height: 72px; }
+  .fc-name { font-size: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-item, .fc-state, .fc-families, .fc-settings, .fc-thumb img, .fc-thumb video, .fc-overlay { animation: none; }
+}

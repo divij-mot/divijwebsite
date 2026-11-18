@@ -144,39 +144,21 @@ const InfinitePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-lg text-neutral-600 dark:text-neutral-400">
-            Conjuring your page...
-          </p>
-        </div>
+      <div className="quantum">
+        <p className="quantum__line serif">Conjuring your page…</p>
+        <div className="quantum__bar" aria-hidden="true"><i /></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="text-red-500 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">
-            Oops! Something went wrong
-          </h2>
-          <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-            Failed to generate the page: {error}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
+      <div className="quantum">
+        <p className="quantum__line serif">Something went wrong</p>
+        <p className="note u-warn quantum__note">Failed to generate the page: {error}</p>
+        <button className="u-action quantum__retry" onClick={() => window.location.reload()}>
+          Try again
+        </button>
       </div>
     );
   }

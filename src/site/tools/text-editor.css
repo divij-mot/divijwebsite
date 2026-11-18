@@ -1,0 +1,200 @@
+/* ─────────────────────────────────────────────────────────────
+   Text Editor
+   The counts sit in the first column level with the file name; the
+   languages and the wrap toggle run down beside the first line of code;
+   the editor hangs off the second column and fills the screen below its name.
+   ───────────────────────────────────────────────────────────── */
+.te {
+  --te-pad-x: clamp(18px, 1.7vw, 30px);
+  --te-pad-y: clamp(22px, 2.3vw, 38px);
+  /* a touch larger on big screens, for long sittings */
+  --te-size: clamp(15px, 0.45vw + 8.6px, 17px);
+  --te-num-gap: 1.6em;
+  /* writing keeps to a reading measure */
+  --te-measure: 72ch;
+  display: grid;
+  grid-template-columns: var(--col) minmax(0, 1fr);
+  grid-template-areas:
+    "count head"
+    "side editor";
+  row-gap: clamp(22px, 3.4vh, 36px);
+}
+
+.te__count {
+  grid-area: count;
+  align-self: baseline;
+  padding-right: clamp(16px, 2.4vw, 40px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the file name is the document's title: the serif, editable in place */
+.te__head {
+  grid-area: head;
+  align-self: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 40px;
+  min-width: 0;
+}
+.te__name {
+  display: inline-grid;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: -0.22em;
+  font-family: var(--serif);
+  font-weight: var(--serif-w);
+  font-variation-settings: var(--serif-vs);
+  font-size: clamp(30px, 2.7vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+.te__name::after,
+.te__name input {
+  grid-area: 1 / 1;
+  padding: 0.04em 0.22em 0.08em;
+  font: inherit;
+  letter-spacing: inherit;
+}
+/* an invisible copy of the name gives the field its width */
+.te__name::after {
+  content: attr(data-value) "\00a0";
+  visibility: hidden;
+  white-space: pre;
+  overflow: hidden;
+}
+.te__name input {
+  width: 100%;
+  min-width: 2em;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--white);
+  caret-color: var(--orange);
+  text-overflow: ellipsis;
+  transition: background 0.3s ease;
+}
+@media (hover: hover) {
+  .te__name input:hover { background: rgb(255 255 255 / 0.05); }
+}
+.te__name input:focus { background: rgb(255 255 255 / 0.08); }
+.te__name input::selection { background: var(--blue); color: var(--white); }
+
+/* actions on the right; what just happened appears to their left */
+.te__bar {
+  display: flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4em 2.8em;
+}
+.te__status {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9em;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
+  pointer-events: none;
+}
+.te__status.is-on { opacity: 1; transform: none; pointer-events: auto; }
+.te__status:empty { display: none; }
+
+/* the first column, level with the first line of code */
+.te__side {
+  grid-area: side;
+  padding-top: calc(var(--te-pad-y) + 0.15em);
+  padding-right: clamp(16px, 2.4vw, 40px);
+}
+.te__langs,
+.te__opts {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.32em;
+}
+.te__langs { grid-area: langs; }
+.te__opts { grid-area: opts; margin-top: clamp(28px, 4.5vh, 48px); }
+
+.te__editor {
+  grid-area: editor;
+  position: relative;
+  min-width: 0;
+  height: clamp(480px, calc(100vh - 150px), 1400px);
+  height: clamp(480px, calc(100svh - 150px), 1400px);
+  background: #0d0d0d;
+}
+.te__cm { height: 100%; }
+.te__cm .cm-editor { height: 100%; }
+.te__editor.is-prose.is-wrap .cm-content { max-width: calc(var(--te-measure) + var(--te-pad-x)); }
+
+/* a file over the editor turns it blue */
+.te__drop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s var(--ease);
+}
+.te__prompt {
+  font: 300 clamp(28px, 3.2vw, 56px) / 1.05 var(--serif);
+  letter-spacing: -0.015em;
+  color: var(--white);
+  transform: translateY(14px);
+  transition: transform 0.6s var(--ease);
+}
+.te__editor.is-over .te__drop { opacity: 1; }
+.te__editor.is-over .te__prompt { transform: none; }
+
+/* phones and tablets: the editor is set a size up so the page never zooms */
+@media (pointer: coarse) {
+  .te { --te-size: 16px; }
+}
+/* a tap shouldn't leave a hover behind: no orange on an action, no half-lit option */
+@media (hover: none) {
+  .te .u-action:hover:not(:focus-visible) { background-position: 100% 0; }
+  .te .u-seg > button:hover:not([aria-pressed="true"]) { color: rgb(255 255 255 / 0.42); }
+}
+
+@media (max-width: 760px) {
+  .te {
+    --te-pad-x: var(--gutter);
+    --te-pad-y: 20px;
+    --te-num-gap: 1.1em;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head head"
+      "langs langs"
+      "editor editor"
+      "count opts";
+    row-gap: 22px;
+  }
+  .te__side { display: contents; }
+  .te__head { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .te__name { font-size: 32px; }
+  .te__bar { flex-direction: row; }
+  .te__langs { flex-direction: row; gap: 0.3em 1.2em; }
+  .te__opts { margin-top: -6px; padding-left: 20px; align-self: baseline; }
+  .te__count { padding-right: 0; margin-top: -6px; }
+  .te__editor {
+    margin-inline: calc(-1 * var(--gutter));
+    height: max(420px, calc(100vh - 210px));
+    height: max(420px, calc(100svh - 210px));
+  }
+}
+/* seven names don't fit one line on a phone: set them as two even rows */
+@media (max-width: 520px) {
+  .te__langs {
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    justify-items: start;
+    gap: 0.3em 1.4em;
+  }
+  .te__langs > button { text-align: left; }
+}
