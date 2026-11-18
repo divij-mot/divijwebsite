@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import STALLS from "../assets/period-stalls.json";
+import { IMG_W, IMG_H, samplePoints } from "./period-points.js";
 
 /*
   period — an end-to-end car-parking world model.
@@ -11,19 +12,6 @@ import STALLS from "../assets/period-stalls.json";
   world model branches a fan of futures ahead of it in blue; the one it takes
   turns orange and becomes the road.
 */
-
-// ── image → ground plane ─────────────────────────────────────
-const IMG_W = 976;
-const IMG_H = 506;
-const HORIZON = -1.1 * IMG_H; // image-space horizon, above the frame
-const K = 27628;
-const F = 500;
-const ZC = 38;
-const ZS = 2.6; // restore the depth the screenshot's camera compressed
-function ground(px, py) {
-  const Z = K / (py - HORIZON);
-  return [((px - IMG_W / 2) * Z) / F, (ZC - Z) * ZS];
-}
 
 // ── shaders ──────────────────────────────────────────────────
 const POINT_VERT = /* glsl */ `
@@ -112,53 +100,36 @@ function loadImage(src) {
 
 const smooth = (t) => t * t * (3 - 2 * t);
 
-export async function createPeriod(host, src) {
-  // ── sample the capture ─────────────────────────────────────
-  const img = await loadImage(src);
-  const cv = document.createElement("canvas");
-  cv.width = IMG_W;
-  cv.height = IMG_H;
-  const cx = cv.getContext("2d", { willReadFrequently: true });
-  cx.drawImage(img, 0, 0, IMG_W, IMG_H);
-  const px = cx.getImageData(0, 0, IMG_W, IMG_H).data;
+// The capture's points, sampled in a worker so the main thread stays free to
+// scroll. Starts as soon as it's called; the scene waits on it later.
+export function samplePeriod(src) {
+  const url = new URL(src, location.href).href;
+  const onMain = async () => {
+    const img = await loadImage(url);
+    const cv = document.createElement("canvas");
+    cv.width = IMG_W;
+    cv.height = IMG_H;
+    const cx = cv.getContext("2d", { willReadFrequently: true });
+    cx.drawImage(img, 0, 0, IMG_W, IMG_H);
+    return samplePoints(cx.getImageData(0, 0, IMG_W, IMG_H).data);
+  };
+  if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return onMain();
+  return new Promise((resolve) => {
+    const w = new Worker(new URL("./period-points.worker.js", import.meta.url), { type: "module" });
+    const done = (v) => (w.terminate(), resolve(v));
+    w.onmessage = ({ data }) => (data.pts ? done(data.pts) : done(onMain()));
+    w.onerror = () => done(onMain());
+    w.postMessage({ src: url });
+  });
+}
 
-  const BONE = new THREE.Color("#f2efe8");
+// wait a frame, then a task: each build step gets its own slice of time
+const breathe = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+export async function createPeriod(host, sampled) {
+  // ── the capture's points ───────────────────────────────────
+  const { pos, col, size, alpha, seed } = await sampled;
   const ORANGE = new THREE.Color("#ff5a1f");
-  const pos = [];
-  const col = [];
-  const size = [];
-  const alpha = [];
-  const seed = [];
-  for (let j = 0; j < IMG_H; j++) {
-    for (let i = 0; i < IMG_W; i++) {
-      const k = (j * IMG_W + i) * 4;
-      const r = px[k];
-      const g = px[k + 1];
-      const b = px[k + 2];
-      const mx = Math.max(r, g, b);
-      const mn = Math.min(r, g, b);
-      const sat = mx ? (mx - mn) / mx : 0;
-      const lum = (r + g + b) / 765;
-      const [x, z] = ground(i + Math.random() - 0.5, j + Math.random() - 0.5);
-      if (sat > 0.42 && mx > 80) {
-        // every past drive, kept as a faint orange record on the ground
-        pos.push(x, 0.03, z);
-        col.push(ORANGE.r, ORANGE.g, ORANGE.b);
-        size.push(1.4);
-        alpha.push(0.12);
-        seed.push(Math.random());
-      } else if (lum > 0.11) {
-        const t = Math.min(1, (lum - 0.11) / 0.55);
-        if (t < 0.08 && Math.random() > 0.5) continue;
-        // stall paint reads bright, the rest of the ground stays quiet
-        pos.push(x, Math.random() * 0.06, z);
-        col.push(BONE.r, BONE.g, BONE.b);
-        size.push(1.5 + t * 1.5);
-        alpha.push(0.08 + Math.pow(t, 1.4) * 0.92);
-        seed.push(Math.random());
-      }
-    }
-  }
 
   const pointUniforms = {
     uTime: { value: 0 },
@@ -172,11 +143,11 @@ export async function createPeriod(host, src) {
     uAperture: { value: 0.09 },
   };
   const pgeo = new THREE.BufferGeometry();
-  pgeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  pgeo.setAttribute("aColor", new THREE.Float32BufferAttribute(col, 3));
-  pgeo.setAttribute("aSize", new THREE.Float32BufferAttribute(size, 1));
-  pgeo.setAttribute("aAlpha", new THREE.Float32BufferAttribute(alpha, 1));
-  pgeo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 1));
+  pgeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  pgeo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+  pgeo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+  pgeo.setAttribute("aAlpha", new THREE.BufferAttribute(alpha, 1));
+  pgeo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
   const points = new THREE.Points(
     pgeo,
     maxBlend(new THREE.ShaderMaterial({ uniforms: pointUniforms, vertexShader: POINT_VERT, fragmentShader: POINT_FRAG }))
@@ -596,6 +567,14 @@ export async function createPeriod(host, src) {
 
     renderer.render(scene, camera);
   }
+
+  // compile every shader and upload the points now, before anyone scrolls here,
+  // so the first frame on screen doesn't stall; cleared so nothing shows yet
+  await breathe();
+  await renderer.compileAsync(scene, camera);
+  await breathe();
+  renderer.render(scene, camera);
+  renderer.clear();
 
   const io = new IntersectionObserver(([e]) => {
     if (e.isIntersecting && !visible) {

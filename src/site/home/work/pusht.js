@@ -36,23 +36,17 @@ const T_PTS = [
 ].map(([x, y]) => [x * S, y * S]);
 const T_R = 2.7 * S; // bounding radius
 
-function inPoly(x, y) {
-  let inside = false;
-  for (let i = 0, j = T_PTS.length - 1; i < T_PTS.length; j = i++) {
-    const [xi, yi] = T_PTS[i];
-    const [xj, yj] = T_PTS[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
+// Is (x, y), in the T's own frame, inside the T? The T is two half-open
+// rectangles stacked in y, the bar and the stem: the same answer an even-odd
+// polygon test on T_PTS gives, without the loop.
+const [BAR_X0, BAR_Y1] = T_PTS[0];
+const [BAR_X1, BAR_Y0] = T_PTS[2];
+const [STEM_X1, STEM_Y0] = T_PTS[4];
+const STEM_X0 = T_PTS[5][0];
+function inT(x, y) {
+  if (y >= BAR_Y0) return y < BAR_Y1 && x >= BAR_X0 && x < BAR_X1;
+  return y >= STEM_Y0 && x >= STEM_X0 && x < STEM_X1;
 }
-function inT(x, z, [cx, cz, yaw]) {
-  const dx = x - cx;
-  const dz = z - cz;
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  return inPoly(dx * c + dz * s, -dx * s + dz * c);
-}
-
 const clamp = (a, b, v) => Math.min(b, Math.max(a, v));
 const smooth = (t) => t * t * (3 - 2 * t);
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -88,7 +82,10 @@ function studioEnvironment(renderer) {
   return pmrem.fromScene(env, 0.02).texture;
 }
 
-export function createPushT(host) {
+// wait a frame, then a task: each build step gets its own slice of time
+const breathe = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+export async function createPushT(host) {
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
@@ -100,6 +97,7 @@ export function createPushT(host) {
 
   const scene = new THREE.Scene();
   scene.environment = studioEnvironment(renderer);
+  await breathe();
   scene.environmentIntensity = 0.62;
   scene.fog = new THREE.Fog(0x050505, 70, 125);
 
@@ -113,7 +111,7 @@ export function createPushT(host) {
   scene.add(rim);
 
   // ── discs ──────────────────────────────────────────────────
-  const geo = new THREE.CylinderGeometry(0.42, 0.42, 0.05, 30, 1);
+  const geo = new THREE.CylinderGeometry(0.42, 0.42, 0.05, host.clientWidth < 760 ? 18 : 30, 1);
   const side = new Float32Array(geo.attributes.position.count);
   const nrm = geo.attributes.normal;
   for (let i = 0; i < side.length; i++) side[i] = nrm.getY(i) > 0.5 ? 1 : nrm.getY(i) < -0.5 ? -1 : 0;
@@ -167,23 +165,36 @@ export function createPushT(host) {
   const tOn = new Uint8Array(N);
   const goalIn = new Uint8Array(N);
   const goalEdge = new Uint8Array(N);
+  const jit = Float32Array.from({ length: N }, (_, k) => hash(k)); // per-disc stagger, fixed
 
+  let facesDirty = true;
   const setFace = (k, faceTop, c) => {
+    facesDirty = true;
     const a = faceTop ? top : bot;
     a[k * 3] = c.r;
     a[k * 3 + 1] = c.g;
     a[k * 3 + 2] = c.b;
   };
 
-  const OFF = [-0.375, -0.125, 0.125, 0.375];
-  function coverage(k, pose) {
-    const x = xs[k] / UNIT;
-    const z = zs[k] / UNIT;
-    if (Math.hypot(x - pose[0], z - pose[1]) > T_R + 0.2) return 0;
+  const OFF = [-0.375, -0.125, 0.125, 0.375].map((o) => o / UNIT);
+  const REACH = (T_R + 0.2) ** 2;
+  // c, s: the pose's yaw, rotated once per pose rather than once per sample
+  function coverage(k, pose, c, s) {
+    const dx0 = xs[k] / UNIT - pose[0];
+    const dz0 = zs[k] / UNIT - pose[1];
+    if (dx0 * dx0 + dz0 * dz0 > REACH) return 0;
     let n = 0;
-    for (const ox of OFF) for (const oz of OFF) if (inT(x + ox / UNIT, z + oz / UNIT, pose)) n++;
+    for (const ox of OFF) {
+      const dx = dx0 + ox;
+      for (const oz of OFF) {
+        const dz = dz0 + oz;
+        if (inT(dx * c + dz * s, -dx * s + dz * c)) n++;
+      }
+    }
     return n / 16;
   }
+  const GOAL_C = Math.cos(GOAL[2]);
+  const GOAL_S = Math.sin(GOAL[2]);
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -194,7 +205,7 @@ export function createPushT(host) {
       tiltZ[k] = (hash(k + 99) - 0.5) * 0.042;
       setFace(k, true, FACE[BG]);
       setFace(k, false, FACE[BG]);
-      goalIn[k] = coverage(k, GOAL) >= 0.5 ? 1 : 0;
+      goalIn[k] = coverage(k, GOAL, GOAL_C, GOAL_S) >= 0.5 ? 1 : 0;
     }
   }
   for (let r = 0; r < ROWS; r++) {
@@ -343,10 +354,12 @@ export function createPushT(host) {
 
     const reveal = revealT >= 0 && time - revealT < 1.6;
     const clearing = ep.phase === "clear";
+    const pc = pose ? Math.cos(pose[2]) : 0;
+    const ps = pose ? Math.sin(pose[2]) : 0;
     for (let k = 0; k < N; k++) {
       // coverage with hysteresis: no stair-step flicker on rotated edges
       if (pose) {
-        const cv = coverage(k, pose);
+        const cv = coverage(k, pose, pc, ps);
         if (cv >= 0.6) tOn[k] = 1;
         else if (cv <= 0.4) tOn[k] = 0;
       } else tOn[k] = 0;
@@ -356,7 +369,7 @@ export function createPushT(host) {
       else if (goalEdge[k]) ci = ORANGE;
 
       const col = (k % COLS) / COLS;
-      const lag = reveal ? col * 0.9 + hash(k) * 0.08 : clearing ? col * 0.6 + hash(k) * 0.024 : hash(k) * 0.024;
+      const lag = reveal ? col * 0.9 + jit[k] * 0.08 : clearing ? col * 0.6 + jit[k] * 0.024 : jit[k] * 0.024;
       flip(k, ci, time, lag);
     }
 
@@ -365,6 +378,7 @@ export function createPushT(host) {
   }
 
   function animate(now) {
+    let moved = false;
     for (let k = 0; k < N; k++) {
       if (t0[k] < 0 || now < t0[k]) continue;
       const p = Math.min(1, (now - t0[k]) / dur[k]);
@@ -375,10 +389,14 @@ export function createPushT(host) {
         t0[k] = -1;
       }
       writeDisc(k);
+      moved = true;
     }
-    discs.instanceMatrix.needsUpdate = true;
-    iTop.needsUpdate = true;
-    iBot.needsUpdate = true;
+    if (moved) discs.instanceMatrix.needsUpdate = true;
+    if (facesDirty) {
+      iTop.needsUpdate = true;
+      iBot.needsUpdate = true;
+      facesDirty = false;
+    }
   }
 
   // ── camera, post ───────────────────────────────────────────
@@ -452,6 +470,17 @@ export function createPushT(host) {
     bokeh.uniforms.focus.value = focusDist;
     composer.render();
   }
+  // compile every shader and upload the board now, before anyone scrolls here,
+  // so the first frame on screen doesn't stall; cleared so nothing shows yet
+  await breathe();
+  renderer.setRenderTarget(composer.readBuffer);
+  await renderer.compileAsync(scene, camera);
+  renderer.setRenderTarget(null);
+  await breathe();
+  composer.render();
+  renderer.setRenderTarget(null);
+  renderer.clear();
+
   const io = new IntersectionObserver(([e]) => {
     if (e.isIntersecting && !visible) {
       visible = true;

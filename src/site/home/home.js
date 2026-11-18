@@ -28,6 +28,13 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
   const $ = (s) => root.querySelector(s);
   const $$ = (s) => [...root.querySelectorAll(s)];
 
+  // ── the project scenes download now, under the intro, so they're built
+  // before anyone scrolls to them; the lot's points are sampled in a worker
+  const periodCode = Promise.all([import("./work/period.js"), import("./assets/period-trajectories.webp")]);
+  const periodPoints = periodCode.then(([m, img]) => m.samplePeriod(img.default));
+  const pushtCode = import("./work/pusht.js");
+  [periodCode, periodPoints, pushtCode].forEach((p) => p.catch(() => {}));
+
   if (!intro) $(".intro")?.remove();
   html.classList.toggle("is-intro", intro);
   html.classList.add("reveals-pending");
@@ -164,52 +171,48 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
         .fromTo(footLetters, { yPercent: (i) => 40 + i * 12 }, { yPercent: 0, ease: "none" }, 0);
     });
 
-    const near = (el, load) => {
-      const io = new IntersectionObserver(
-        ([e]) => {
-          if (!e.isIntersecting) return;
-          io.disconnect();
-          load();
-        },
-        { rootMargin: "120% 0px" }
-      );
-      io.observe(el);
-      cleanups.push(() => io.disconnect());
-    };
+    buildScenes();
+  }
 
+  // Both scenes are built one after the other while the reader is still up
+  // top, then each draws in together with its own text.
+  async function buildScenes() {
     const periodHost = $(".work__media--period");
     const pushtHost = $(".work__media--pusht");
-    near(periodHost, async () => {
-      const [{ createPeriod }, { default: src }] = await Promise.all([
-        import("./work/period.js"),
-        import("./assets/period-trajectories.webp"),
-      ]);
+    try {
+      const [{ createPeriod }] = await periodCode;
       if (dead) return;
-      const field = await createPeriod(periodHost, src);
+      const field = await createPeriod(periodHost, periodPoints);
       if (dead) return field.dispose();
       scenes.push(field);
       ctx.add(() =>
         ScrollTrigger.create({
-          trigger: periodHost,
-          start: "top 78%",
+          trigger: periodHost.closest(".work"),
+          start: "top 82%",
           once: true,
           onEnter: () => gsap.to(field.uniforms.uReveal, { value: 1, duration: 2.6, ease: "power2.inOut" }),
         })
       );
-    });
-    near(pushtHost, async () => {
-      const { createPushT } = await import("./work/pusht.js");
+    } catch (e) {
+      console.error("period scene", e);
+    }
+    try {
+      const { createPushT } = await pushtCode;
       if (dead) return;
-      scenes.push(createPushT(pushtHost));
+      const board = await createPushT(pushtHost);
+      if (dead) return board.dispose();
+      scenes.push(board);
       ctx.add(() =>
         gsap.from(pushtHost, {
           clipPath: "inset(0 100% 0 0)",
           duration: 1.4,
           ease: "expo.inOut",
-          scrollTrigger: { trigger: pushtHost, start: "top 80%" },
+          scrollTrigger: { trigger: pushtHost.closest(".work"), start: "top 82%" },
         })
       );
-    });
+    } catch (e) {
+      console.error("push-T scene", e);
+    }
   }
 
   // ── detents: name, period, Causal Video Generation; free below ──

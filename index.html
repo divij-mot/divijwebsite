@@ -45,6 +45,25 @@
   <body>
     <div id="root"></div>
     <script>
+      // The intro reads "DIVIJ" off a canvas. A page's first canvas text in a face
+      // is slow (a few hundred ms on phones), so pay it now, while the app script
+      // is still downloading, instead of mid-intro.
+      if (
+        document.documentElement.classList.contains('is-intro') &&
+        !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+        document.fonts
+      ) {
+        document.fonts.load('900 100px "Archivo Variable"').then(function () {
+          var c = document.createElement('canvas');
+          c.width = c.height = 64;
+          var x = c.getContext('2d', { willReadFrequently: true });
+          x.font = '900 100px "Archivo Variable"';
+          if ('fontStretch' in x) x.fontStretch = 'expanded';
+          x.fillText('DIVIJ', 0, 80);
+        });
+      }
+    </script>
+    <script>
       // Cross-origin isolation (for multi-threaded FFmpeg) is only wanted on the
       // file converter, and never on Safari/iOS, which loop with COEP credentialless.
       // Everywhere else, clear any isolation worker an earlier version installed.
