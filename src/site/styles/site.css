@@ -157,6 +157,34 @@ button:focus-visible .f { transform: perspective(3em) rotateX(180deg); }
   color: var(--white);
 }
 
+/* the hero's affiliation row: the same quiet links, as their marks */
+.links--marks {
+  align-items: center;
+  gap: 24px;
+}
+.mark {
+  display: block;
+  color: inherit;
+  line-height: 0;
+  transition: color 0.45s var(--ease);
+}
+.mark svg {
+  display: block;
+  width: 30px;
+  height: 30px;
+  fill: currentColor;
+}
+.mark--seamless {
+  width: 54px;
+  height: 32px;
+  background-color: currentColor;
+  -webkit-mask: url("/marks/seamless-dolphin.png") center / contain no-repeat;
+  mask: url("/marks/seamless-dolphin.png") center / contain no-repeat;
+}
+@media (hover: hover) {
+  .mark:hover { color: var(--accent); }
+}
+
 /* ─────────────────────────────────────────────────────────────
    Intro
    ───────────────────────────────────────────────────────────── */
