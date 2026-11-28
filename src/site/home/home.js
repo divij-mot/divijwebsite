@@ -1,8 +1,6 @@
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
-import Lenis from "lenis";
-import Snap from "lenis/snap";
 import { runIntro } from "./intro.js";
 import { splitWord, kernWord, fitWord, setAxis, gutter } from "../lib/wordmark.js";
 import { flipify } from "../lib/flip.js";
@@ -80,18 +78,6 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
       if (!html.classList.contains("is-intro")) ScrollTrigger.refresh();
     })
   );
-
-  // ── smooth scroll ─────────────────────────────────────────
-  const lenis = new Lenis({ lerp: 0.075, wheelMultiplier: 0.95 });
-  lenis.on("scroll", ScrollTrigger.update);
-  const raf = (t) => lenis.raf(t * 1000);
-  gsap.ticker.add(raf);
-  gsap.ticker.lagSmoothing(0);
-  lenis.stop();
-  cleanups.push(() => {
-    gsap.ticker.remove(raf);
-    lenis.destroy();
-  });
 
   // ── reveals: lines rise out of their own mask ─────────────
   const splits = [];
@@ -184,8 +170,8 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
     buildScenes();
   }
 
-  // Both scenes are built one after the other while the reader is still up
-  // top, then each draws in together with its own text.
+  // Both scenes are built while the reader is still up top, and each
+  // starts on its own as soon as it exists — not on a later scroll.
   async function buildScenes() {
     const periodHost = $(".work__media--period");
     const pushtHost = $(".work__media--pusht");
@@ -195,14 +181,7 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
       const field = await createPeriod(periodHost, periodPoints);
       if (dead) return field.dispose();
       scenes.push(field);
-      ctx.add(() =>
-        ScrollTrigger.create({
-          trigger: periodHost.closest(".work"),
-          start: "top 82%",
-          once: true,
-          onEnter: () => gsap.to(field.uniforms.uReveal, { value: 1, duration: 2.6, ease: "power2.inOut" }),
-        })
-      );
+      ctx.add(() => gsap.to(field.uniforms.uReveal, { value: 1, duration: 2.6, ease: "power2.inOut" }));
     } catch (e) {
       console.error("period scene", e);
     }
@@ -217,7 +196,6 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
           clipPath: "inset(0 100% 0 0)",
           duration: 1.4,
           ease: "expo.inOut",
-          scrollTrigger: { trigger: pushtHost.closest(".work"), start: "top 82%" },
         })
       );
     } catch (e) {
@@ -225,47 +203,12 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
     }
   }
 
-  // ── detents: name, period, Causal Video Generation; free below ──
-  let snap = null;
-  let lastDetent = 0;
-  const detentY = () =>
-    $$(".work").map((w) => {
-      const vh = window.innerHeight;
-      const r = w.getBoundingClientRect();
-      const top = r.top + window.scrollY;
-      return Math.max(0, Math.round(r.height < vh ? top - (vh - r.height) / 2 : top - vh * 0.06));
-    });
-  function setDetents() {
-    snap?.destroy();
-    snap = new Snap(lenis, {
-      type: "lock",
-      distanceThreshold: "125%",
-      debounce: 90,
-      duration: 0.95,
-      easing: (t) => 1 - Math.pow(1 - t, 4),
-    });
-    snap.add(0);
-    lastDetent = 0;
-    detentY().forEach((y) => {
-      snap.add(y);
-      lastDetent = Math.max(lastDetent, y);
-    });
-  }
-  lenis.on("scroll", ({ scroll }) => {
-    if (!snap) return;
-    const free = scroll > lastDetent + window.innerHeight * 0.32;
-    if (free && !snap.isStopped) snap.stop();
-    else if (!free && snap.isStopped) snap.start();
-  });
-  cleanups.push(() => snap?.destroy());
-
   let lastW = window.innerWidth;
   const onResize = () => {
     if (window.innerWidth === lastW) return;
     lastW = window.innerWidth;
     fitAll();
     ScrollTrigger.refresh();
-    if (snap) setDetents();
   };
   window.addEventListener("resize", onResize);
   cleanups.push(() => window.removeEventListener("resize", onResize));
@@ -273,13 +216,14 @@ export function initHome(root, { playIntro = false, section = null, navigate } =
   function finish() {
     if (dead) return;
     html.classList.remove("is-intro");
-    lenis.start();
     scrollScenes();
     ScrollTrigger.refresh();
-    setDetents();
     if (section) {
-      const target = section === "contact" ? $(".contact") : section === "work" ? detentY()[0] : 0;
-      lenis.scrollTo(target, { immediate: true, force: true });
+      const el = section === "contact" ? $(".contact") : section === "work" ? $(".work") : null;
+      if (el) {
+        const top = el.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo(0, Math.max(0, top));
+      }
       ScrollTrigger.update();
     }
   }

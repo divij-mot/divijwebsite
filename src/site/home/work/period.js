@@ -464,7 +464,6 @@ export async function createPeriod(host, sampled) {
   const target = A0.park.clone();
   const lead = new THREE.Vector3();
   const reveal = { value: 0 };
-  let visible = false;
   let raf = 0;
   let last = 0;
   let clock = 0;
@@ -571,29 +570,16 @@ export async function createPeriod(host, sampled) {
     renderer.render(scene, camera);
   }
 
-  // compile every shader and upload the points now, before anyone scrolls here,
-  // so the first frame on screen doesn't stall; cleared so nothing shows yet
+  // compile every shader up front so the first frame doesn't stall, then
+  // run immediately — the drive starts with the page, even while below the fold
   await breathe();
   await renderer.compileAsync(scene, camera);
   await breathe();
-  renderer.render(scene, camera);
-  renderer.clear();
-
-  const io = new IntersectionObserver(([e]) => {
-    if (e.isIntersecting && !visible) {
-      visible = true;
-      last = 0;
-      raf = requestAnimationFrame(frame);
-    } else if (!e.isIntersecting && visible) {
-      visible = false;
-      cancelAnimationFrame(raf);
-    }
-  });
-  io.observe(host);
+  last = 0;
+  raf = requestAnimationFrame(frame);
 
   function dispose() {
     cancelAnimationFrame(raf);
-    io.disconnect();
     ro.disconnect();
     scene.traverse((o) => {
       o.geometry?.dispose();

@@ -442,7 +442,6 @@ export async function createPushT(host) {
 
   const aim = new THREE.Vector3(-1.0 * UNIT, 0, 0.2 * UNIT);
   let focusDist = 70;
-  let visible = false;
   let raf = 0;
   let last = 0;
   let clock = 0;
@@ -475,33 +474,19 @@ export async function createPushT(host) {
     bokeh.uniforms.focus.value = focusDist;
     composer.render();
   }
-  // compile every shader and upload the board now, before anyone scrolls here,
-  // so the first frame on screen doesn't stall; cleared so nothing shows yet
+  // compile every shader up front so the first frame doesn't stall, then
+  // run immediately — the rollout starts with the page, even while below the fold
   await breathe();
   renderer.setRenderTarget(composer.readBuffer);
   await renderer.compileAsync(scene, camera);
   renderer.setRenderTarget(null);
   await breathe();
-  composer.render();
-  renderer.setRenderTarget(null);
-  renderer.clear();
-
-  const io = new IntersectionObserver(([e]) => {
-    if (e.isIntersecting && !visible) {
-      visible = true;
-      last = 0;
-      raf = requestAnimationFrame(frame);
-    } else if (!e.isIntersecting && visible) {
-      visible = false;
-      cancelAnimationFrame(raf);
-    }
-  });
-  io.observe(host);
+  last = 0;
+  raf = requestAnimationFrame(frame);
 
   return {
     dispose() {
       cancelAnimationFrame(raf);
-      io.disconnect();
       ro.disconnect();
       scene.traverse((o) => {
         o.geometry?.dispose();
